@@ -1,12 +1,14 @@
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { AnimatePresence } from "framer-motion";
 import Navbar from "./components/shared/Navbar";
+import DemoBanner from "./components/shared/DemoBanner";
+import DemoStepIndicator from "./components/shared/DemoStepIndicator";
 import AdminRoute from "./components/shared/AdminRoute";
 import useOffline from "./hooks/useOffline";
 import useSocket from "./hooks/useSocket";
 import useAppStore from "./store/useAppStore";
-import useDemoFlow, { useDemoFlowSync } from "./hooks/useDemoFlow";
-import { DEMO_MODE } from "./config/demoMode";
+import { useDemoFlowSync } from "./hooks/useDemoFlow";
+import { DEMO_UI_MODE } from "./store/useDemoStore";
 
 import Home from "./pages/Home";
 import Dashboard from "./pages/Dashboard";
@@ -21,49 +23,67 @@ import DemoRoute from "./pages/DemoRoute";
 import SimulationControlPanel from "./pages/SimulationControlPanel";
 
 export default function App() {
-  const offline = useOffline();
+  const offline  = useOffline();
   const location = useLocation();
-  const isSimulationControl = location.pathname === "/sim-control";
-  const token = useAppStore((s) => s.token) || localStorage.getItem("sankat-token");
+  const isSimControl = location.pathname === "/sim-control";
+
+  // Keep demo flow in sync with sim-control socket events
+  const token  = useAppStore((s) => s.token) || localStorage.getItem("sankat-token");
   const socket = useSocket(token);
   useDemoFlowSync(socket);
-  const { currentStep } = useDemoFlow();
 
   return (
     <div className="min-h-screen bg-bg text-text">
-      {!isSimulationControl ? <Navbar /> : null}
-      {!isSimulationControl && offline ? (
-        <div className="mx-auto max-w-7xl rounded-lg border border-warn/40 bg-warn/20 px-4 py-2 text-sm text-warn">OFFLINE MODE - SMS fallback active</div>
-      ) : null}
+      {!isSimControl && <Navbar />}
 
-      {DEMO_MODE && !isSimulationControl ? (
-        <div className="mx-auto mt-2 max-w-7xl rounded-md border border-live/40 bg-black/30 px-4 py-2 text-sm">
-          Step indicator: <span className="font-mono text-live">{currentStep}</span>
+      {/* Single offline notice */}
+      {!isSimControl && offline && (
+        <div className="mx-auto max-w-7xl px-4 pt-2">
+          <div className="rounded-lg border border-amber-500/40 bg-amber-950/60 px-4 py-2 text-sm text-amber-200">
+            OFFLINE MODE — SMS fallback active
+          </div>
         </div>
-      ) : null}
+      )}
+
+      {/* Single top banner — replaces all per-page broadcast banners */}
+      {!isSimControl && (
+        <div className="mx-auto max-w-7xl px-4 pt-3">
+          <DemoBanner />
+        </div>
+      )}
+
+      {/* Step indicator — subtle dot progress + Prev/Next */}
+      {!isSimControl && DEMO_UI_MODE && <DemoStepIndicator />}
 
       <AnimatePresence mode="wait">
         <Routes>
-          {DEMO_MODE ? <Route path="/" element={<Navigate to="/dashboard" replace />} /> : <Route path="/" element={<Home />} />}
+          <Route path="/"          element={<Home />} />
           <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/sos" element={<SOSPage />} />
-          <Route path="/family" element={<FamilyReunite />} />
+          <Route path="/sos"       element={<SOSPage />} />
+          <Route path="/family"    element={<FamilyReunite />} />
           <Route path="/volunteer" element={<VolunteerHub />} />
-          <Route path="/admin" element={DEMO_MODE ? <AdminPortal /> : <AdminRoute><AdminPortal /></AdminRoute>} />
-          {!DEMO_MODE ? <Route path="/shelter" element={<ShelterFinder />} /> : null}
-          {!DEMO_MODE ? <Route path="/resources" element={<ResourceTracker />} /> : null}
-          {!DEMO_MODE ? <Route path="/offline" element={<OfflineMode />} /> : null}
-          {!DEMO_MODE ? <Route path="/demo" element={<DemoRoute />} /> : null}
+          <Route path="/shelter"   element={<ShelterFinder />} />
+          <Route
+            path="/admin"
+            element={
+              <AdminRoute>
+                <AdminPortal />
+              </AdminRoute>
+            }
+          />
+          <Route path="/resources"   element={<ResourceTracker />} />
+          <Route path="/offline"     element={<OfflineMode />} />
+          <Route path="/demo"        element={<DemoRoute />} />
           <Route path="/sim-control" element={<SimulationControlPanel />} />
-          <Route path="*" element={<Navigate to={DEMO_MODE ? "/dashboard" : "/"} replace />} />
+          <Route path="*"            element={<Navigate to="/" replace />} />
         </Routes>
       </AnimatePresence>
 
-      {!isSimulationControl ? (
-        <footer className="mx-auto mt-8 max-w-7xl border-t border-border px-4 py-6 text-sm text-muted">
-          Privacy First: Face data processed locally. No biometric storage. GDPR deletion supported.
+      {!isSimControl && (
+        <footer className="mx-auto mt-8 max-w-7xl border-t border-border px-4 py-4 text-xs text-muted">
+          Face data processed locally · No biometric storage · GDPR deletion supported
         </footer>
-      ) : null}
+      )}
     </div>
   );
 }

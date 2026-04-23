@@ -3,6 +3,17 @@ import { create } from "zustand";
 // ─── DEMO CONTROL FLAG ────────────────────────────────────────────────────────
 export const DEMO_UI_MODE = true;
 
+// Phase → useDemoFlowStore step name mapping so Next→ button drives animations
+const PHASE_TO_FLOW_STEP = {
+  standby:   "idle",
+  cyclone:   "cyclone",
+  sos:       "sos",
+  panic:     "panic",
+  family:    "family",
+  volunteer: "volunteer",
+  resolved:  "resolution",
+};
+
 // Step definitions for the 5-phase demo flow
 export const DEMO_STEPS = [
   { id: 0, phase: "standby",   label: "Standby",           banner: "System ready. Awaiting simulation start." },
@@ -46,6 +57,11 @@ const useDemoStore = create((set, get) => ({
           : stepId === 5 ? "route-highlight"
           : null,
         transitioning: false,
+      });
+      // ── Bridge to useDemoFlowStore so useActiveAnimation stays in sync ──
+      // Import is deferred to avoid circular dependency at module load time
+      import("../hooks/useDemoFlow").then(({ syncDemoStep }) => {
+        syncDemoStep(PHASE_TO_FLOW_STEP[def.phase] ?? "idle");
       });
     }, 300);
   },

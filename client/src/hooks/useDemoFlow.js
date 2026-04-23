@@ -66,3 +66,8 @@ export function useDemoFlowSync(socket) {
     };
   }, [setStep, setWaitingForUser, socket]);
 }
+
+// Called by useDemoStore.goToStep so the Next→ button drives animation state
+export function syncDemoStep(step) {
+  useDemoFlowStore.getState().setStep(step, false);
+}

@@ -44,6 +44,9 @@ export default function useTapSOS({ socket, userId, onTriggered, onTapCount }) {
     }, 700);
   };
 
+  // Intentionally NOT attaching a global window click/touchstart listener.
+  // Tap counting is driven by the SOS button's own onClick via onTapCount.
+  // A global listener caused accidental SOS triggers on every page click.
   useEffect(() => {
     const flushQueue = async () => {
       if (!socket || !socket.connected) return;
@@ -59,27 +62,5 @@ export default function useTapSOS({ socket, userId, onTriggered, onTapCount }) {
     return () => window.removeEventListener("online", flushQueue);
   }, [socket]);
 
-  useEffect(() => {
-    const registerTap = () => {
-      const now = Date.now();
-      tapsRef.current = [...tapsRef.current.filter((t) => now - t < 2000), now];
-      onTapCount?.(tapsRef.current.length);
-      if (tapsRef.current.length >= 3) {
-        tapsRef.current = [];
-        onTapCount?.(0);
-        triggerSilentSOS();
-      }
-    };
-
-    window.addEventListener("touchstart", registerTap, { passive: true });
-    window.addEventListener("click", registerTap, { passive: true });
-    return () => {
-      window.removeEventListener("touchstart", registerTap);
-      window.removeEventListener("click", registerTap);
-    };
-  }, [onTapCount, socket, userId]);
-
-  return {
-    triggerSilentSOS
-  };
+  return { triggerSilentSOS };
 }

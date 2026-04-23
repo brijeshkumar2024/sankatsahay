@@ -50,7 +50,39 @@ class DemoOrchestrator {
         this.broadcast("map:risk:update", {
           source: "demoOrchestrator",
           phase: 1,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
+          zones: [
+            {
+              id: "zone-puri",
+              name: "Puri Coastal Impact",
+              center: [19.8135, 85.8312],
+              radiusMeters: 12000,
+              severity: "CRITICAL",
+              color: "#FF3B30",
+              blink: true,
+              intensity: 68
+            },
+            {
+              id: "zone-bhubaneswar",
+              name: "Bhubaneswar SOS Zone",
+              center: [20.2961, 85.8245],
+              radiusMeters: 8000,
+              severity: "CRITICAL",
+              color: "#FF3B30",
+              blink: true,
+              intensity: 68
+            },
+            {
+              id: "zone-cuttack",
+              name: "Cuttack Warning Zone",
+              center: [20.4625, 85.8830],
+              radiusMeters: 6000,
+              severity: "WARNING",
+              color: "#F59E0B",
+              blink: false,
+              intensity: 42
+            }
+          ]
         });
         break;
       case "sos":
@@ -88,8 +120,8 @@ class DemoOrchestrator {
       case "resolution":
         this.setStep("resolution", true);
         this.broadcast("broadcast:alert", {
-          message: "Resolution phase: rescue operations are stabilizing.",
-          severity: "WATCH",
+          message: "Situation stabilising — all SOS alerts resolved.",
+          severity: "SAFE",
           phase: 4,
           timestamp: new Date().toISOString()
         });

@@ -3,9 +3,7 @@ import Card from "../components/ui/Card";
 import useSocket from "../hooks/useSocket";
 import useSimulationFeed from "../hooks/useSimulationFeed";
 import useAppStore from "../store/useAppStore";
-import useDemoFlow from "../hooks/useDemoFlow";
 import useActiveAnimation from "../hooks/useActiveAnimation";
-import Button from "../components/ui/Button";
 
 function StatCard({ label, value, color }) {
   return (
@@ -17,30 +15,35 @@ function StatCard({ label, value, color }) {
 }
 
 export default function VolunteerHub() {
-  const { currentStep, setWaitingForUser } = useDemoFlow();
-  if (currentStep !== "volunteer") return null;
-
+  // NO step gate — page always renders
   const token       = useAppStore((s) => s.token) || localStorage.getItem("sankat-token");
   const socket      = useSocket(token);
   useSimulationFeed(socket);
   const demand      = useAppStore((s) => s.volunteerDemand);
   const assignments = useAppStore((s) => s.volunteerAssignments);
-  const animation = useActiveAnimation();
+
+  // Route highlight animation — gated by step, NOT the page
+  const animation   = useActiveAnimation();
   const routeActive = animation.volunteerHighlight;
 
   return (
-    <motion.main initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.25 }} className="mx-auto max-w-5xl space-y-4 p-4">
+    <motion.main
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.35 }}
+      className="mx-auto max-w-5xl space-y-4 p-4"
+    >
       <h2 className="font-heading text-2xl uppercase tracking-wide">Volunteer Dispatch</h2>
       <p className="text-sm text-muted">AI-scored assignment: distance 40% · skill 40% · load 20%</p>
 
       {/* ── 3 stat cards ─────────────────────────────────────────────── */}
       <div className="grid grid-cols-3 gap-4">
-        <StatCard label="Required"  value={demand.required}                              color="text-red-400" />
-        <StatCard label="Assigned"  value={demand.assigned}                              color="text-green-400" />
-        <StatCard label="Deficit"   value={Math.max(0, demand.required - demand.assigned)} color="text-amber-400" />
+        <StatCard label="Required" value={demand.required}                               color="text-red-400" />
+        <StatCard label="Assigned" value={demand.assigned}                               color="text-green-400" />
+        <StatCard label="Deficit"  value={Math.max(0, demand.required - demand.assigned)} color="text-amber-400" />
       </div>
 
-      {/* ── Route highlight indicator ─────────────────────────────────── */}
+      {/* ── Route highlight — ONLY when volunteer animation step active ── */}
       {routeActive && (
         <motion.div
           initial={{ opacity: 0, y: -6 }}
@@ -63,7 +66,7 @@ export default function VolunteerHub() {
             >
               <div>
                 <p className="font-semibold text-green-400">
-                  {item.volunteerTag} {"->"} {item.targetZone}
+                  {item.volunteerTag} → {item.targetZone}
                 </p>
                 <p className="text-sm text-muted">{item.role} · ETA {item.etaMinutes}m</p>
               </div>
@@ -95,19 +98,6 @@ export default function VolunteerHub() {
             <span className="font-mono text-green-400">{demand.searchTeamsNeeded}</span>
           </li>
         </ul>
-      </Card>
-
-      <Card>
-        <p className="text-sm text-muted">Manual checkpoint</p>
-        <Button
-          className="mt-3"
-          onClick={() => {
-            setWaitingForUser(false);
-            socket?.emit("demo:run-step", { step: "resolution" });
-          }}
-        >
-          Continue to Resolution
-        </Button>
       </Card>
     </motion.main>
   );

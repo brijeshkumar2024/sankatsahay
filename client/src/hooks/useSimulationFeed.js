@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import useAppStore from "../store/useAppStore";
+import useDemoStore from "../store/useDemoStore";
 import { DEMO_MODE } from "../config/demoMode";
 
 export default function useSimulationFeed(socket) {
@@ -41,13 +42,19 @@ export default function useSimulationFeed(socket) {
       setVolunteerDemand(payload.demand, assignments);
     };
     const onPanicUpdate = (payload) =>
-      setSimulationState({
-        panicIndex: payload.panicIndex,
-        panic: payload.panic
-      });
+      setSimulationState({ panicIndex: payload.panicIndex, panic: payload.panic });
     const onFamilyUpdate = (payload) => setFamilyStatus(payload.familyStatus);
     const onKpiUpdate = (payload) => setAdminKpi(payload.kpi, payload.resources);
-    const onBroadcast = (payload) => setBroadcastAlert(payload);
+
+    // broadcast:alert updates both appStore AND useDemoStore banner
+    const onBroadcast = (payload) => {
+      setBroadcastAlert(payload);
+      if (payload?.message) {
+        // Normalise severity: server sends "SAFE"/"WATCH" etc, banner expects lowercase
+        const sev = (payload.severity || "watch").toLowerCase();
+        useDemoStore.getState().setBanner(payload.message, sev);
+      }
+    };
 
     socket.on("state:scenario:update", onScenarioUpdate);
     socket.on("map:risk:update", onMapRiskUpdate);

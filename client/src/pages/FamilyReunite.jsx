@@ -7,7 +7,6 @@ import useAppStore from "../store/useAppStore";
 import useSocket from "../hooks/useSocket";
 import { api } from "../services/api";
 import useSimulationFeed from "../hooks/useSimulationFeed";
-import useDemoFlow from "../hooks/useDemoFlow";
 
 function statusColor(status) {
   if (status === "SAFE")  return "text-green-400 bg-green-900/30 border-green-700/40";
@@ -16,17 +15,14 @@ function statusColor(status) {
 }
 
 export default function FamilyReunite() {
-  const { currentStep, setWaitingForUser } = useDemoFlow();
-  if (currentStep !== "family") return null;
-
-  const token      = useAppStore((s) => s.token) || localStorage.getItem("sankat-token");
-  const user       = useAppStore((s) => s.user) || { name: "Demo User", familyPin: "NEXORA", bloodGroup: "O+" };
-  const familySt   = useAppStore((s) => s.familyStatus);
-  const socket     = useSocket(token);
+  // NO step gate — page always renders
+  const token    = useAppStore((s) => s.token) || localStorage.getItem("sankat-token");
+  const user     = useAppStore((s) => s.user) || { name: "Demo User", familyPin: "NEXORA", bloodGroup: "O+" };
+  const familySt = useAppStore((s) => s.familyStatus);
+  const socket   = useSocket(token);
   useSimulationFeed(socket);
 
-  const qrWrapRef     = useRef(null);
-
+  const qrWrapRef = useRef(null);
   const [members,   setMembers]   = useState([]);
   const [matches,   setMatches]   = useState([]);
   const [uploading, setUploading] = useState(false);
@@ -37,15 +33,16 @@ export default function FamilyReunite() {
   );
 
   useEffect(() => {
-    api.familyDashboard(user?.familyPin || "NEXORA").then((d) => setMembers(d.members || [])).catch(() => {});
+    api.familyDashboard(user?.familyPin || "NEXORA")
+      .then((d) => setMembers(d.members || []))
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
     if (!socket) return;
     socket.emit("join:family", user?.familyPin || "NEXORA");
-    const onUpdate = (member) => {
+    const onUpdate = (member) =>
       setMembers((prev) => prev.map((m) => (String(m._id) === String(member._id) ? { ...m, ...member } : m)));
-    };
     socket.on("family:status-update", onUpdate);
     return () => socket.off("family:status-update", onUpdate);
   }, [socket, user]);
@@ -74,7 +71,12 @@ export default function FamilyReunite() {
   };
 
   return (
-    <motion.main initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.25 }} className="mx-auto max-w-5xl space-y-4 p-4">
+    <motion.main
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.35 }}
+      className="mx-auto max-w-5xl space-y-4 p-4"
+    >
       <div className="flex items-center justify-between">
         <div>
           <h2 className="font-heading text-2xl uppercase tracking-wide">Family Reunification</h2>
@@ -86,7 +88,7 @@ export default function FamilyReunite() {
         </div>
       </div>
 
-      {/* ── Top row: QR + Face match ──────────────────────────────────── */}
+      {/* ── QR card + Face match ──────────────────────────────────────── */}
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <p className="font-mono text-xs uppercase tracking-widest text-muted">Emergency QR Card</p>
@@ -103,8 +105,8 @@ export default function FamilyReunite() {
         <Card>
           <p className="font-mono text-xs uppercase tracking-widest text-muted">Face Match</p>
           <label className="mt-4 flex cursor-pointer flex-col items-center gap-2 rounded-xl border border-dashed border-border p-6 text-sm text-muted transition hover:border-live/50 hover:text-text">
-            <span className="text-xl">Face Match Upload</span>
-            {uploading ? "Analysing..." : "Upload photo to find matches"}
+            <span className="text-2xl">📷</span>
+            {uploading ? "Analysing…" : "Upload photo to find matches"}
             <input
               type="file"
               accept="image/*"
@@ -128,7 +130,7 @@ export default function FamilyReunite() {
         </Card>
       </div>
 
-      {/* ── Family member status ──────────────────────────────────────── */}
+      {/* ── Family member status cards ────────────────────────────────── */}
       {members.length > 0 && (
         <Card>
           <p className="font-mono text-xs uppercase tracking-widest text-muted">Family Status</p>
@@ -137,9 +139,7 @@ export default function FamilyReunite() {
               <div key={m._id} className="flex items-center justify-between rounded-xl border border-border bg-white/5 px-4 py-3">
                 <div>
                   <p className="font-semibold">{m.name}</p>
-                  <p className="text-xs text-muted">
-                    {new Date(m.updatedAt || Date.now()).toLocaleTimeString()}
-                  </p>
+                  <p className="text-xs text-muted">{new Date(m.updatedAt || Date.now()).toLocaleTimeString()}</p>
                 </div>
                 <div className="flex items-center gap-3">
                   <span className={`rounded-full border px-3 py-0.5 text-xs font-semibold ${statusColor(m.status)}`}>
@@ -157,18 +157,13 @@ export default function FamilyReunite() {
         </Card>
       )}
 
-      <Card>
-        <p className="text-sm text-muted">Manual checkpoint</p>
-        <Button
-          className="mt-3"
-          onClick={() => {
-            setWaitingForUser(false);
-            socket?.emit("demo:run-step", { step: "volunteer" });
-          }}
-        >
-          Continue to Volunteer Assignment
-        </Button>
-      </Card>
+      {/* Fallback when no members loaded yet */}
+      {members.length === 0 && (
+        <Card>
+          <p className="font-mono text-xs uppercase tracking-widest text-muted">Family Status</p>
+          <p className="mt-3 text-sm text-muted">Family members will appear once simulation starts or family PIN is registered.</p>
+        </Card>
+      )}
     </motion.main>
   );
 }
