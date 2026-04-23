@@ -7,6 +7,11 @@ const userSchema = new mongoose.Schema(
     password: { type: String, required: true },
     role: { type: String, enum: ["user", "admin", "volunteer"], default: "user" },
     language: { type: String, default: "en" },
+    preferredLanguage: {
+      type: String,
+      enum: ["en", "hi", "or", "bn", "ta", "te", "mr"],
+      default: "hi"
+    },
     bloodGroup: { type: String, default: "Unknown" },
     familyPin: String,
     photoUrl: String,

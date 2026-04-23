@@ -23,7 +23,7 @@ router.post("/login", async (req, res) => {
 });
 
 router.post("/register", async (req, res) => {
-  const { name, email, password, familyPin, role = "user", faceDescriptor = [], photoUrl } = req.body;
+  const { name, email, password, familyPin, role = "user", faceDescriptor = [], photoUrl, preferredLanguage } = req.body;
   const hash = await bcrypt.hash(password, 10);
   const user = await User.create({
     name,
@@ -32,7 +32,8 @@ router.post("/register", async (req, res) => {
     familyPin,
     role,
     photoUrl,
-    faceDescriptor: Array.isArray(faceDescriptor) ? faceDescriptor.slice(0, 128) : []
+    faceDescriptor: Array.isArray(faceDescriptor) ? faceDescriptor.slice(0, 128) : [],
+    ...(preferredLanguage ? { preferredLanguage } : {})
   });
   return res.status(201).json(user);
 });
