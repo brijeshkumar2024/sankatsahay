@@ -9,8 +9,7 @@ import useVoiceSOS from "../hooks/useVoiceSOS";
 import useAppStore from "../store/useAppStore";
 import useSocket from "../hooks/useSocket";
 import useSimulationFeed from "../hooks/useSimulationFeed";
-import useVibration from "../hooks/useVibration";
-import useActiveAnimation from "../hooks/useActiveAnimation";
+import useDemoStore from "../store/useDemoStore";
 import useDemoFlow from "../hooks/useDemoFlow";
 
 // ── Panic mode: 3 large buttons, calm background, breathing circle ────────────
@@ -51,7 +50,7 @@ function SOSConfirmOverlay({ onDismiss }) {
       zIndex: 9999,
     }}>
       <div style={{ fontSize: "48px", marginBottom: "24px" }}>🆘</div>
-      <h1 style={{ color: "#10B981", fontSize: "32px", fontWeight: "bold", marginBottom: "16px", margin: "0 0 16px" }}>
+      <h1 style={{ color: "#10B981", fontSize: "32px", fontWeight: "bold", margin: "0 0 16px" }}>
         Help is Coming
       </h1>
       <p style={{ color: "#9CA3AF", fontSize: "18px", margin: 0 }}>
@@ -74,24 +73,28 @@ function SOSConfirmOverlay({ onDismiss }) {
 
 // ── Normal SOS view ───────────────────────────────────────────────────────────
 export default function SOSPage() {
-  const navigate   = useNavigate();
-  const token      = useAppStore((s) => s.token) || localStorage.getItem("sankat-token");
-  const user       = useAppStore((s) => s.user) || { id: "demo-user" };
+  const navigate  = useNavigate();
+  const token     = useAppStore((s) => s.token) || localStorage.getItem("sankat-token");
+  const user      = useAppStore((s) => s.user) || { id: "demo-user" };
   const simulation = useAppStore((s) => s.simulation);
-  const addMapPin  = useAppStore((s) => s.addMapPin);
-  const socket     = useSocket(token);
+  const addMapPin = useAppStore((s) => s.addMapPin);
+  const socket    = useSocket(token);
   useSimulationFeed(socket);
-  const vibration  = useVibration();
 
-  const animation      = useActiveAnimation();
-  const sosPulseActive = animation.sosPulse;
+  // Read pulse animation directly from useDemoStore — same source as Dashboard.
+  // This avoids stale state from useDemoFlowStore when user navigates to /sos
+  // without going through the demo step buttons.
+  const activeAnimation = useDemoStore((s) => s.activeAnimation);
+  const sosPulseActive  = activeAnimation === "sos-pulse";
+
+  // Only used to detect panic step — NOT to auto-trigger SOS
   const { currentStep } = useDemoFlow();
 
   const [sosTriggered,   setSOSTriggered]   = useState(false);
   const [confirmMessage, setConfirmMessage] = useState("");
   const [panicMode,      setPanicMode]      = useState(false);
 
-  // Called immediately when 3rd tap registers — no async delay
+  // Called only when user physically taps the button 3 times
   const handleSOSTriggered = useCallback(({ lat, lng }) => {
     // Show overlay immediately
     setSOSTriggered(true);
@@ -100,7 +103,7 @@ export default function SOSPage() {
     // Add pin to map
     addMapPin({ id: `s-${Date.now()}`, type: "sos", coords: [lat, lng], risk: "critical" });
 
-    // Emit socket event
+    // Emit socket event — server saves to DB with valid coords
     socket?.emit("sos:silent", {
       userId: user?._id || user?.id || "demo-user",
       lat,
@@ -109,10 +112,8 @@ export default function SOSPage() {
       type: "tap-sos",
     });
 
-    // Trigger panic reversal after 2 seconds
-    setTimeout(() => setPanicMode(true), 2000);
-
-    // Auto-reset overlay after 10 seconds for demo
+    // Auto-dismiss overlay after 10 seconds — do NOT auto-trigger panic here.
+    // Panic is only triggered by the demo step button or simulation phase >= 3.
     setTimeout(() => {
       setSOSTriggered(false);
       setConfirmMessage("");
@@ -121,20 +122,18 @@ export default function SOSPage() {
 
   const { tapCount, handleTap, tapsRequired } = useTapSOS({ onTrigger: handleSOSTriggered });
 
-  // Voice SOS still uses legacy trigger
   const voice = useVoiceSOS(() => {
     handleSOSTriggered({ lat: 20.2961, lng: 85.8245 });
   });
 
-  // Auto-trigger panic from simulation phase
+  // Panic only from simulation phase — NOT from SOS tap
   useEffect(() => {
     if (simulation.phase >= 3 || simulation.panicIndex >= 80) {
       setPanicMode(true);
-      vibration.calmPulse?.();
     }
-  }, [simulation.panicIndex, simulation.phase, vibration]);
+  }, [simulation.phase, simulation.panicIndex]);
 
-  // Auto-trigger panic when demo step reaches "panic"
+  // Panic from demo step button (sim-control "Step: Panic")
   useEffect(() => {
     if (currentStep === "panic") setPanicMode(true);
   }, [currentStep]);
@@ -155,7 +154,7 @@ export default function SOSPage() {
 
       <Card>
         <div className="relative mx-auto flex w-fit flex-col items-center py-8">
-          {/* Pulse ring — only when sos animation step active */}
+          {/* Pulse ring — ONLY when demo store activeAnimation is sos-pulse */}
           {sosPulseActive && (
             <motion.div
               className="absolute inset-0 rounded-full border-2 border-red-500/60"
@@ -172,10 +171,9 @@ export default function SOSPage() {
           </motion.button>
         </div>
 
-        {/* Tap progress */}
         <p className="text-center text-sm font-semibold text-muted">
           {tapCount > 0
-            ? `${tapCount} / ${tapsRequired} — keep tapping!`
+            ? `${tapCount} / ${tapsRequired} \u2014 keep tapping!`
             : "Tap 3 times to send SOS"}
         </p>
 
@@ -199,7 +197,6 @@ export default function SOSPage() {
         </div>
       </Card>
 
-      {/* Fullscreen confirmation overlay — immediate, z-index 9999 */}
       {sosTriggered && <SOSConfirmOverlay onDismiss={() => setSOSTriggered(false)} />}
     </motion.main>
   );
