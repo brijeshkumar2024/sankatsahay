@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import confetti from "canvas-confetti";
 import { QRCodeSVG } from "qrcode.react";
 import Card from "../components/ui/Card";
 import Button from "../components/ui/Button";
@@ -8,24 +7,28 @@ import useAppStore from "../store/useAppStore";
 import useSocket from "../hooks/useSocket";
 import { api } from "../services/api";
 import useSimulationFeed from "../hooks/useSimulationFeed";
+import useDemoFlow from "../hooks/useDemoFlow";
 
-function getStatusBadgeClass(status) {
-  if (status === "SAFE") return "bg-safe/20 text-safe";
-  if (status === "FOUND") return "bg-live/20 text-live";
-  return "bg-alert/20 text-alert";
+function statusColor(status) {
+  if (status === "SAFE")  return "text-green-400 bg-green-900/30 border-green-700/40";
+  if (status === "FOUND") return "text-sky-400   bg-sky-900/30   border-sky-700/40";
+  return                         "text-red-400   bg-red-900/30   border-red-700/40";
 }
 
 export default function FamilyReunite() {
-  const token = useAppStore((s) => s.token) || localStorage.getItem("sankat-token");
-  const user = useAppStore((s) => s.user) || { name: "Demo User", familyPin: "NEXORA", bloodGroup: "O+" };
-  const socket = useSocket(token);
-  useSimulationFeed(socket);
-  const familyStatus = useAppStore((s) => s.familyStatus);
-  const simulation = useAppStore((s) => s.simulation);
-  const qrWrapRef = useRef(null);
+  const { currentStep, setWaitingForUser } = useDemoFlow();
+  if (currentStep !== "family") return null;
 
-  const [members, setMembers] = useState([]);
-  const [matches, setMatches] = useState([]);
+  const token      = useAppStore((s) => s.token) || localStorage.getItem("sankat-token");
+  const user       = useAppStore((s) => s.user) || { name: "Demo User", familyPin: "NEXORA", bloodGroup: "O+" };
+  const familySt   = useAppStore((s) => s.familyStatus);
+  const socket     = useSocket(token);
+  useSimulationFeed(socket);
+
+  const qrWrapRef     = useRef(null);
+
+  const [members,   setMembers]   = useState([]);
+  const [matches,   setMatches]   = useState([]);
   const [uploading, setUploading] = useState(false);
 
   const qrPayload = useMemo(
@@ -33,36 +36,25 @@ export default function FamilyReunite() {
     [user]
   );
 
-  const loadFamily = async () => {
-    const data = await api.familyDashboard(user?.familyPin || "NEXORA");
-    setMembers(data.members || []);
-  };
-
   useEffect(() => {
-    loadFamily().catch(() => {});
+    api.familyDashboard(user?.familyPin || "NEXORA").then((d) => setMembers(d.members || [])).catch(() => {});
   }, []);
 
   useEffect(() => {
     if (!socket) return;
     socket.emit("join:family", user?.familyPin || "NEXORA");
-    const handleStatusUpdate = (member) => {
+    const onUpdate = (member) => {
       setMembers((prev) => prev.map((m) => (String(m._id) === String(member._id) ? { ...m, ...member } : m)));
-      if (member.status === "FOUND") {
-        confetti({ particleCount: 120, spread: 75, origin: { y: 0.7 } });
-      }
     };
-    socket.on("family:status-update", handleStatusUpdate);
-    return () => socket.off("family:status-update", handleStatusUpdate);
+    socket.on("family:status-update", onUpdate);
+    return () => socket.off("family:status-update", onUpdate);
   }, [socket, user]);
 
   const onFaceUpload = async (file) => {
     setUploading(true);
     const base64 = await new Promise((resolve, reject) => {
       const reader = new FileReader();
-      reader.onload = () => {
-        if (typeof reader.result === "string") resolve(reader.result);
-        else reject(new Error("Failed to read image as base64"));
-      };
+      reader.onload = () => (typeof reader.result === "string" ? resolve(reader.result) : reject());
       reader.onerror = reject;
       reader.readAsDataURL(file);
     });
@@ -74,89 +66,108 @@ export default function FamilyReunite() {
   const downloadQR = () => {
     const svg = qrWrapRef.current?.querySelector("svg");
     if (!svg) return;
-    const serializer = new XMLSerializer();
-    const src = serializer.serializeToString(svg);
-    const blob = new Blob([src], { type: "image/svg+xml;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "sankatsahay-qr.svg";
-    link.click();
+    const blob = new Blob([new XMLSerializer().serializeToString(svg)], { type: "image/svg+xml;charset=utf-8" });
+    const url  = URL.createObjectURL(blob);
+    const a    = Object.assign(document.createElement("a"), { href: url, download: "sankatsahay-qr.svg" });
+    a.click();
     URL.revokeObjectURL(url);
   };
 
   return (
-    <motion.main initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className={`mx-auto max-w-7xl space-y-4 p-4 ${simulation.phase >= 3 ? "panic-ui" : ""}`}>
-      <div className="broadcast-banner rounded-xl px-4 py-3">
-        <p className="text-xs text-red-100">REUNIFICATION MODE :: phase {simulation.phase}</p>
-        <p className="mt-1 text-sm text-white">
-          Separated: {familyStatus.separatedCount} | Reunited: {familyStatus.reunitedCount}
-        </p>
+    <motion.main initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.25 }} className="mx-auto max-w-5xl space-y-4 p-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="font-heading text-2xl uppercase tracking-wide">Family Reunification</h2>
+          <p className="text-sm text-muted">
+            Separated: <span className="text-amber-400">{familySt.separatedCount}</span>
+            &nbsp;·&nbsp;
+            Reunited: <span className="text-green-400">{familySt.reunitedCount}</span>
+          </p>
+        </div>
       </div>
-      <h2 className="font-heading text-3xl">Family Reunification</h2>
-      <div className="grid gap-4 lg:grid-cols-3">
+
+      {/* ── Top row: QR + Face match ──────────────────────────────────── */}
+      <div className="grid gap-4 md:grid-cols-2">
         <Card>
-          <p className="text-sm text-muted">Emergency QR Card</p>
-          <div ref={qrWrapRef} className="mt-3 flex justify-center">
-            <QRCodeSVG value={qrPayload} size={200} />
+          <p className="font-mono text-xs uppercase tracking-widest text-muted">Emergency QR Card</p>
+          <div ref={qrWrapRef} className="mt-4 flex justify-center">
+            <QRCodeSVG value={qrPayload} size={180} bgColor="transparent" fgColor="#f3f7fb" />
           </div>
-          <div className="mt-4 flex flex-wrap gap-2">
+          <p className="mt-3 text-center font-mono text-lg text-green-400">{user?.familyPin || "NEXORA"}</p>
+          <div className="mt-4 flex justify-center gap-3">
             <Button variant="ghost" onClick={downloadQR}>Download QR</Button>
-            <Button variant="ghost" onClick={() => globalThis.print()}>Print QR Card</Button>
+            <Button variant="ghost" onClick={() => globalThis.print()}>Print</Button>
           </div>
         </Card>
 
         <Card>
-          <p className="text-sm text-muted">Face Match Upload</p>
-          <input
-            type="file"
-            accept="image/*"
-            className="mt-3 w-full"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) onFaceUpload(file);
-            }}
-          />
-          <p className="mt-2 text-xs text-muted">{uploading ? "Analyzing face..." : "Upload child/elder image to find top 3 matches"}</p>
+          <p className="font-mono text-xs uppercase tracking-widest text-muted">Face Match</p>
+          <label className="mt-4 flex cursor-pointer flex-col items-center gap-2 rounded-xl border border-dashed border-border p-6 text-sm text-muted transition hover:border-live/50 hover:text-text">
+            <span className="text-xl">Face Match Upload</span>
+            {uploading ? "Analysing..." : "Upload photo to find matches"}
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) onFaceUpload(f); }}
+            />
+          </label>
           <div className="mt-3 space-y-2">
             {matches.map((m) => (
-              <div key={m.userId} className="rounded-lg border border-border bg-white/5 p-2">
-                <p className="font-semibold">{m.name || m.userId}</p>
-                <p className="text-sm text-muted">Confidence: {m.confidence}%</p>
-                <Button className="mt-2" variant="ghost" onClick={() => api.updateFamilyStatus(m.userId, "FOUND")}>Confirm Match</Button>
+              <div key={m.userId} className="flex items-center justify-between rounded-lg border border-border bg-white/5 px-3 py-2">
+                <div>
+                  <p className="font-semibold">{m.name || m.userId}</p>
+                  <p className="text-xs text-muted">Confidence: {m.confidence}%</p>
+                </div>
+                <Button className="h-9 min-w-0 px-3 text-xs" variant="ghost" onClick={() => api.updateFamilyStatus(m.userId, "FOUND")}>
+                  Confirm
+                </Button>
               </div>
             ))}
           </div>
         </Card>
-
-        <Card>
-          <p className="text-sm text-muted">Family PIN</p>
-          <p className="mt-1 font-mono text-3xl text-live">{user?.familyPin || "NEXORA"}</p>
-          <p className="mt-3 text-xs text-muted">
-            Latest match: {familyStatus.latestMatch?.memberName || "Awaiting candidate"}
-            {" "}
-            {familyStatus.latestMatch?.confidence ? `(${familyStatus.latestMatch.confidence}%)` : ""}
-          </p>
-        </Card>
       </div>
 
-      <Card>
-        <h3 className="font-heading text-xl">Family Status Dashboard</h3>
-        <div className="mt-3 grid gap-3 md:grid-cols-2">
-          {members.map((m) => (
-            <div key={m._id} className="rounded-xl border border-border bg-white/5 p-3">
-              <div className="flex items-center justify-between">
-                <p className="font-semibold">{m.name}</p>
-                <span className={`rounded-full px-3 py-1 text-xs ${getStatusBadgeClass(m.status)}`}>
-                  {m.status}
-                </span>
+      {/* ── Family member status ──────────────────────────────────────── */}
+      {members.length > 0 && (
+        <Card>
+          <p className="font-mono text-xs uppercase tracking-widest text-muted">Family Status</p>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            {members.map((m) => (
+              <div key={m._id} className="flex items-center justify-between rounded-xl border border-border bg-white/5 px-4 py-3">
+                <div>
+                  <p className="font-semibold">{m.name}</p>
+                  <p className="text-xs text-muted">
+                    {new Date(m.updatedAt || Date.now()).toLocaleTimeString()}
+                  </p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className={`rounded-full border px-3 py-0.5 text-xs font-semibold ${statusColor(m.status)}`}>
+                    {m.status}
+                  </span>
+                  {m.status !== "SAFE" && (
+                    <Button className="h-8 min-w-0 px-3 text-xs" variant="ghost" onClick={() => api.updateFamilyStatus(m._id, "SAFE")}>
+                      Mark Safe
+                    </Button>
+                  )}
+                </div>
               </div>
-              <p className="mt-1 text-sm text-muted">Last seen: {new Date(m.updatedAt || Date.now()).toLocaleString()}</p>
-              <p className="font-mono text-xs text-muted">Map pin: {m.lastKnownLocation?.coordinates?.join(", ")}</p>
-              <Button className="mt-3" variant="ghost" onClick={() => api.updateFamilyStatus(m._id, "SAFE")}>Mark as Safe</Button>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      <Card>
+        <p className="text-sm text-muted">Manual checkpoint</p>
+        <Button
+          className="mt-3"
+          onClick={() => {
+            setWaitingForUser(false);
+            socket?.emit("demo:run-step", { step: "volunteer" });
+          }}
+        >
+          Continue to Volunteer Assignment
+        </Button>
       </Card>
     </motion.main>
   );

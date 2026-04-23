@@ -3,65 +3,111 @@ import Card from "../components/ui/Card";
 import useSocket from "../hooks/useSocket";
 import useSimulationFeed from "../hooks/useSimulationFeed";
 import useAppStore from "../store/useAppStore";
+import useDemoFlow from "../hooks/useDemoFlow";
+import useActiveAnimation from "../hooks/useActiveAnimation";
+import Button from "../components/ui/Button";
+
+function StatCard({ label, value, color }) {
+  return (
+    <Card>
+      <p className="font-mono text-xs uppercase tracking-widest text-muted">{label}</p>
+      <p className={`mt-2 font-mono text-4xl font-bold ${color}`}>{value}</p>
+    </Card>
+  );
+}
 
 export default function VolunteerHub() {
-  const token = useAppStore((s) => s.token) || localStorage.getItem("sankat-token");
-  const socket = useSocket(token);
+  const { currentStep, setWaitingForUser } = useDemoFlow();
+  if (currentStep !== "volunteer") return null;
+
+  const token       = useAppStore((s) => s.token) || localStorage.getItem("sankat-token");
+  const socket      = useSocket(token);
   useSimulationFeed(socket);
-  const demand = useAppStore((s) => s.volunteerDemand);
+  const demand      = useAppStore((s) => s.volunteerDemand);
   const assignments = useAppStore((s) => s.volunteerAssignments);
-  const simulation = useAppStore((s) => s.simulation);
+  const animation = useActiveAnimation();
+  const routeActive = animation.volunteerHighlight;
 
   return (
-    <motion.main initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className={`mx-auto max-w-7xl p-4 ${simulation.phase >= 3 ? "panic-ui" : ""}`}>
-      <h2 className="font-heading text-3xl uppercase">Volunteer Allocation Console</h2>
-      <p className="mt-1 text-muted">Logic-driven dispatch based on distance, skill score, and active workload.</p>
+    <motion.main initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.25 }} className="mx-auto max-w-5xl space-y-4 p-4">
+      <h2 className="font-heading text-2xl uppercase tracking-wide">Volunteer Dispatch</h2>
+      <p className="text-sm text-muted">AI-scored assignment: distance 40% · skill 40% · load 20%</p>
 
-      <div className="mt-4 grid gap-4 md:grid-cols-3">
-        <Card>
-          <p className="text-xs uppercase text-muted">Required responders</p>
-          <p className="mt-2 font-mono text-4xl text-alert">{demand.required}</p>
-        </Card>
-        <Card>
-          <p className="text-xs uppercase text-muted">Assigned responders</p>
-          <p className="mt-2 font-mono text-4xl text-live">{demand.assigned}</p>
-        </Card>
-        <Card>
-          <p className="text-xs uppercase text-muted">Deficit</p>
-          <p className="mt-2 font-mono text-4xl text-warn">{Math.max(0, demand.required - demand.assigned)}</p>
-        </Card>
+      {/* ── 3 stat cards ─────────────────────────────────────────────── */}
+      <div className="grid grid-cols-3 gap-4">
+        <StatCard label="Required"  value={demand.required}                              color="text-red-400" />
+        <StatCard label="Assigned"  value={demand.assigned}                              color="text-green-400" />
+        <StatCard label="Deficit"   value={Math.max(0, demand.required - demand.assigned)} color="text-amber-400" />
       </div>
 
-      <div className="mt-4 grid gap-4 md:grid-cols-2">
-        <Card>
-          <p className="text-sm text-muted">Demand Breakdown</p>
-          <ul className="mt-2 space-y-2 text-sm">
-            <li>Medics needed: <span className="font-mono text-live">{demand.medicsNeeded}</span></li>
-            <li>Boats needed: <span className="font-mono text-live">{demand.boatsNeeded}</span></li>
-            <li>Search teams needed: <span className="font-mono text-live">{demand.searchTeamsNeeded}</span></li>
-          </ul>
-        </Card>
-        <Card>
-          <p className="text-sm text-muted">Assignment Logic</p>
-          <p className="mt-2 text-sm">Score = distance(40%) + skill(40%) + load(20%).</p>
-          <p className="text-sm">Higher score responders are prioritized for critical SOS clusters.</p>
-        </Card>
-      </div>
+      {/* ── Route highlight indicator ─────────────────────────────────── */}
+      {routeActive && (
+        <motion.div
+          initial={{ opacity: 0, y: -6 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="rounded-xl border border-sky-500/40 bg-sky-950/60 px-4 py-3 text-sm text-sky-200"
+        >
+          <span className="mr-2 font-mono text-xs text-sky-400">ROUTE ACTIVE</span>
+          AI-optimised evacuation corridor highlighted on map — ETA 8 min
+        </motion.div>
+      )}
 
-      <Card className="mt-4">
-        <p className="text-sm text-muted">Recent Assignments</p>
+      {/* ── Assignment list ───────────────────────────────────────────── */}
+      <Card>
+        <p className="font-mono text-xs uppercase tracking-widest text-muted">Recent Assignments</p>
         <div className="mt-3 space-y-2">
           {assignments.slice(0, 8).map((item) => (
-            <div key={item.id} className="rounded-lg border border-border bg-black/20 p-3">
-              <p className="font-semibold text-live">{item.volunteerTag} {"->"} {item.targetZone}</p>
-              <p className="text-sm text-muted">{item.role} | ETA {item.etaMinutes}m</p>
+            <div
+              key={item.id}
+              className="flex items-center justify-between rounded-lg border border-border bg-black/20 px-4 py-3"
+            >
+              <div>
+                <p className="font-semibold text-green-400">
+                  {item.volunteerTag} {"->"} {item.targetZone}
+                </p>
+                <p className="text-sm text-muted">{item.role} · ETA {item.etaMinutes}m</p>
+              </div>
               <p className="font-mono text-xs text-muted">
-                distance:{item.score?.distance} skill:{item.score?.skill} load:{item.score?.load}
+                d:{item.score?.distance} s:{item.score?.skill} l:{item.score?.load}
               </p>
             </div>
           ))}
-          {assignments.length === 0 ? <p className="text-sm text-muted">Assignments will appear once simulation starts.</p> : null}
+          {assignments.length === 0 && (
+            <p className="text-sm text-muted">Assignments appear once simulation starts.</p>
+          )}
         </div>
+      </Card>
+
+      {/* ── Demand breakdown ─────────────────────────────────────────── */}
+      <Card>
+        <p className="font-mono text-xs uppercase tracking-widest text-muted">Demand Breakdown</p>
+        <ul className="mt-3 space-y-2 text-sm">
+          <li className="flex justify-between border-b border-border pb-2">
+            <span className="text-muted">Medics needed</span>
+            <span className="font-mono text-green-400">{demand.medicsNeeded}</span>
+          </li>
+          <li className="flex justify-between border-b border-border pb-2">
+            <span className="text-muted">Boats needed</span>
+            <span className="font-mono text-green-400">{demand.boatsNeeded}</span>
+          </li>
+          <li className="flex justify-between">
+            <span className="text-muted">Search teams</span>
+            <span className="font-mono text-green-400">{demand.searchTeamsNeeded}</span>
+          </li>
+        </ul>
+      </Card>
+
+      <Card>
+        <p className="text-sm text-muted">Manual checkpoint</p>
+        <Button
+          className="mt-3"
+          onClick={() => {
+            setWaitingForUser(false);
+            socket?.emit("demo:run-step", { step: "resolution" });
+          }}
+        >
+          Continue to Resolution
+        </Button>
       </Card>
     </motion.main>
   );

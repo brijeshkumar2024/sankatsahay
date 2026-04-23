@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import useAppStore from "../store/useAppStore";
+import { DEMO_MODE } from "../config/demoMode";
 
 export default function useSimulationFeed(socket) {
   const setSimulationState = useAppStore((s) => s.setSimulationState);
@@ -20,8 +21,9 @@ export default function useSimulationFeed(socket) {
     const onScenarioUpdate = (payload) => setSimulationState(payload);
     const onMapRiskUpdate = (payload) => setRiskZones(payload.zones || []);
     const onSosStreamUpdate = (payload) => {
-      setSosStream(payload.recent || []);
-      (payload.recent || []).slice(0, 3).forEach((event) => {
+      const recent = DEMO_MODE ? (payload.recent || []).slice(0, 1) : (payload.recent || []);
+      setSosStream(recent);
+      recent.forEach((event) => {
         if (typeof event.lat === "number" && typeof event.lng === "number") {
           addMapPin({
             id: event.id,
@@ -34,7 +36,10 @@ export default function useSimulationFeed(socket) {
         }
       });
     };
-    const onVolunteerDemandUpdate = (payload) => setVolunteerDemand(payload.demand, payload.assignments);
+    const onVolunteerDemandUpdate = (payload) => {
+      const assignments = DEMO_MODE ? (payload.assignments || []).slice(0, 1) : payload.assignments;
+      setVolunteerDemand(payload.demand, assignments);
+    };
     const onPanicUpdate = (payload) =>
       setSimulationState({
         panicIndex: payload.panicIndex,

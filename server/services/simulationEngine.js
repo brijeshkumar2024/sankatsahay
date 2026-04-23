@@ -1,4 +1,5 @@
 const SCENARIO_ID = "cyclone-flood-panic-india-01";
+const DEMO_MODE = true;
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
@@ -444,6 +445,7 @@ class SimulationEngine {
   }
 
   start() {
+    if (DEMO_MODE) return;
     if (this.timer) return;
     this.timer = setInterval(() => this.tick(), 2500);
   }

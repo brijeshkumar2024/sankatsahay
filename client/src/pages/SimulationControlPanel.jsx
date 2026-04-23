@@ -3,6 +3,7 @@ import useSocket from "../hooks/useSocket";
 import useSimulationFeed from "../hooks/useSimulationFeed";
 import useAppStore from "../store/useAppStore";
 import { api } from "../services/api";
+import useDemoFlow from "../hooks/useDemoFlow";
 
 const basePanel = {
   intensity: 68,
@@ -15,8 +16,12 @@ function pretty(value) {
 }
 
 export default function SimulationControlPanel() {
+  const isNodeDev = typeof process !== "undefined" && process?.env?.NODE_ENV === "development";
+  const isAuthorized = isNodeDev || import.meta.env.DEV || localStorage.getItem("demo_access") === "true";
   const socket = useSocket(null);
   useSimulationFeed(socket);
+  const { currentStep, waitingForUser } = useDemoFlow();
+  if (!isAuthorized) return null;
 
   const simulation = useAppStore((s) => s.simulation);
   const adminKpi = useAppStore((s) => s.adminKpi);
@@ -54,6 +59,15 @@ export default function SimulationControlPanel() {
     }
   };
 
+  const runDemoStep = (step) => {
+    if (socket?.connected) {
+      socket.emit("demo:run-step", { step });
+      setStatus(`demo step ${step} dispatched`);
+      return;
+    }
+    setStatus(`demo step ${step} queued - socket unavailable`);
+  };
+
   const commandPayload = useMemo(
     () => ({
       intensity: panel.intensity,
@@ -79,6 +93,22 @@ export default function SimulationControlPanel() {
         </header>
 
         <section className="sim-grid mt-4">
+          <article className="sim-block">
+            <h2>Demo Step Orchestrator</h2>
+            <div className="sim-actions">
+              <button onClick={() => runDemoStep("cyclone")}>Step: Cyclone</button>
+              <button onClick={() => runDemoStep("sos")}>Step: SOS</button>
+              <button onClick={() => runDemoStep("panic")}>Step: Panic</button>
+              <button onClick={() => runDemoStep("family")}>Step: Family</button>
+              <button onClick={() => runDemoStep("volunteer")}>Step: Volunteer</button>
+              <button onClick={() => runDemoStep("resolution")}>Step: Resolution</button>
+            </div>
+            <div className="mt-3 rounded-lg border border-border p-2 text-sm">
+              Current step: <strong>{currentStep}</strong> | waiting:{" "}
+              <strong>{waitingForUser ? "user action" : "ready"}</strong>
+            </div>
+          </article>
+
           <article className="sim-block">
             <h2>Scenario Commands</h2>
             <div className="sim-actions">

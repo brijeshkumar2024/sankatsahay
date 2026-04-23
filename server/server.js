@@ -10,6 +10,7 @@ import { basicRateLimit } from "./middleware/rateLimit.js";
 import { registerSocketHandlers } from "./socket/socketHandlers.js";
 import { runPredictionJob } from "./services/predictionService.js";
 import { simulationEngine } from "./services/simulationEngine.js";
+import { demoOrchestrator } from "./services/demoOrchestrator.js";
 
 import authRoutes from "./routes/auth.js";
 import sosRoutes from "./routes/sos.js";
@@ -54,6 +55,7 @@ app.use("/api/simulation", simulationRoutes);
 
 registerSocketHandlers(io);
 simulationEngine.attach(io);
+demoOrchestrator.attach(io);
 simulationEngine.start();
 
 cron.schedule("0 * * * *", async () => {

@@ -5,12 +5,14 @@ import { sendSMS } from "../services/smsService.js";
 import { explainDecision } from "../services/nvidiaService.js";
 import { logAIDecision } from "../services/aiDecisionService.js";
 import { simulationEngine } from "../services/simulationEngine.js";
+import { demoOrchestrator } from "../services/demoOrchestrator.js";
 
 export function registerSocketHandlers(io) {
   io.on("connection", (socket) => {
     socket.on("join:admin", () => socket.join("admin-room"));
     socket.on("join:ops", () => socket.join("ops-room"));
     socket.on("join:simulation", () => socket.join("sim-room"));
+    socket.on("join:demo", () => socket.join("demo-room"));
     socket.on("join:family", (familyPin) => socket.join(`family:${familyPin}`));
     socket.on("join:zone", (zoneId) => socket.join(`zone:${zoneId}`));
     socket.on("join:user", (userId) => socket.join(`user:${userId}`));
@@ -41,6 +43,18 @@ export function registerSocketHandlers(io) {
 
     socket.on("simulate:story:play", () => {
       simulationEngine.playStory();
+    });
+
+    socket.on("demo:request-state", () => {
+      socket.emit("demo:step-changed", demoOrchestrator.getState());
+    });
+
+    socket.on("demo:run-step", async ({ step }) => {
+      await demoOrchestrator.runStep(step);
+    });
+
+    socket.on("demo:user-action", async ({ action }) => {
+      await demoOrchestrator.runUserAction(action);
     });
 
     socket.on("sos:trigger", (payload) => {
