@@ -66,6 +66,38 @@ const useAppStore = create((set) => ({
   },
   setAuth: (token, user) => set({ token, user }),
   setPanicMode: (panicMode) => set({ panicMode }),
+  // Full reset — restores all simulation-driven state to initial values
+  resetSimulation: () => set({
+    mapPins: demoPins,
+    riskZones: [],
+    simulation: initialSimulation,
+    broadcastAlert: {
+      message: "Simulation standby. Awaiting operator command.",
+      severity: "WATCH",
+      phase: 0,
+      timestamp: new Date().toISOString()
+    },
+    sosStream: [],
+    volunteerDemand: {
+      required: 16,
+      assigned: 8,
+      medicsNeeded: 5,
+      boatsNeeded: 2,
+      searchTeamsNeeded: 3
+    },
+    volunteerAssignments: [],
+    familyStatus: {
+      separatedCount: 2,
+      reunitedCount: 0,
+      latestMatch: null
+    },
+    resources: {
+      foodShortagePercent: 8,
+      medicalShortagePercent: 10,
+      shelterOccupancyPercent: 52
+    },
+    adminKpi: initialKpi,
+  }),
   addMapPin: (pin) =>
     set((state) => {
       const deduped = state.mapPins.filter((existing) => existing.id !== pin.id);

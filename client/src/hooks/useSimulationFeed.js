@@ -103,7 +103,13 @@ export default function useSimulationFeed(socket) {
     };
 
     const onSimReset = () => {
-      applyDemoStep("idle", "System ready. Awaiting simulation start.", "watch", null);
+      // Reset all app store simulation data
+      useAppStore.getState().resetSimulation();
+      // Reset demo store — banner, animation, step indicator back to standby
+      useDemoStore.getState().setBanner("System ready. Awaiting simulation start.", "watch");
+      useDemoStore.getState().setActiveAnimation(null);
+      useDemoStore.getState().goToStep(0);
+      syncDemoStep("idle");
     };
 
     const onSimSOS = () => {

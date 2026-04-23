@@ -78,6 +78,22 @@ export default function SimulationControlPanel() {
     }
   };
 
+  const handleReset = async () => {
+    // 1. Emit via socket (fastest path — all connected clients react immediately)
+    if (socket?.connected) {
+      socket.emit("simulate:reset");
+    }
+    // 2. Also call API so server state resets even if socket drops
+    try {
+      await api.sendSimulationCommand("simulate:reset", {});
+    } catch {
+      // Server may already have reset via socket — not fatal
+    }
+    // 3. Reset local sim-control panel state
+    setPanel(basePanel);
+    setStatus("Demo reset. System ready.");
+  };
+
   const runDemoStep = (step) => {
     if (socket?.connected) {
       socket.emit("demo:run-step", { step });
@@ -138,7 +154,7 @@ export default function SimulationControlPanel() {
               <button onClick={() => send("simulate:panic", { ...commandPayload, phase: 3, panicIndex: Math.max(82, simulation.panicIndex) })}>
                 Trigger Panic Zone
               </button>
-              <button className="danger" onClick={() => send("simulate:reset")}>Reset Demo</button>
+              <button className="danger" onClick={handleReset}>Reset Demo</button>
             </div>
             <div className="sim-actions mt-3">
               <button onClick={() => send("simulate:story:play")}>Play Story Mode</button>
