@@ -65,7 +65,7 @@ router.post("/voice-chat", async (req, res) => {
     const completion = await client.chat.completions.create({
       model:       process.env.NVIDIA_MODEL || "meta/llama-3.1-8b-instruct",
       messages,
-      max_tokens:  120,
+      max_tokens:  80,
       temperature: 0.7,
     });
 
@@ -74,12 +74,10 @@ router.post("/voice-chat", async (req, res) => {
 
     return res.json({ response });
   } catch (err) {
-    // eslint-disable-next-line no-console
-    console.error("voice-chat error:", err.message);
-    return res.status(500).json({
-      response: "Abhi connect nahi ho pa raha. SOS button dabayein.",
-      error: err.message,
-    });
+    const fallbackMsg = (req.body?.language || "hi-IN").startsWith("hi")
+      ? "अभी जुड़ नहीं पा रहे। SOS बटन दबाएं।"
+      : "Cannot connect right now. Press SOS button.";
+    return res.json({ response: fallbackMsg });
   }
 });
 

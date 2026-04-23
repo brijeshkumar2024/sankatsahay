@@ -457,14 +457,39 @@ class SimulationEngine {
     }
   }
 
+  navigate(path) {
+    if (this.io) this.io.emit("demo:navigate", { path });
+  }
+
   playStory() {
     this.clearStoryTimer();
     this.applyReset();
     this.updateConfig({ simMode: true, intensity: 62, sosFrequency: 8 });
-    this.applyCyclone({ intensity: 68 });
 
-    this.storyTimer = setTimeout(() => this.applyFlood({ intensity: 78, waterLevelMeters: 2.1, sosFrequency: 14 }), 16000);
-    setTimeout(() => this.applyPanic({ panicIndex: 84, zoneId: "zone-cuttack-core" }), 32000);
+    // Step 1 — Cyclone → Dashboard
+    this.applyCyclone({ intensity: 68 });
+    this.navigate("/dashboard");
+
+    // Step 2 — SOS page
+    setTimeout(() => this.navigate("/sos"), 4000);
+
+    // Step 3 — Flood + panic on SOS page
+    this.storyTimer = setTimeout(() => {
+      this.applyFlood({ intensity: 78, waterLevelMeters: 2.1, sosFrequency: 14 });
+      this.navigate("/sos");
+    }, 16000);
+
+    // Step 4 — Panic → family
+    setTimeout(() => {
+      this.applyPanic({ panicIndex: 84, zoneId: "zone-cuttack-core" });
+      this.navigate("/family");
+    }, 32000);
+
+    // Step 5 — Volunteer
+    setTimeout(() => this.navigate("/volunteer"), 46000);
+
+    // Step 6 — Admin
+    setTimeout(() => this.navigate("/admin"), 58000);
   }
 }
 

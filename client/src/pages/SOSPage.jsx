@@ -72,14 +72,28 @@ export default function SOSPage() {
   const autoTimerRef = useRef(null);
   const countdownRef = useRef(null);
 
-  const handleSOSTriggered = useCallback(({ lat, lng, type = "tap-sos" }) => {
+  const handleSOSTriggered = useCallback(({ lat, lng, type = "tap-sos", _gpsUpdate = false }) => {
+    // GPS background update — only re-emit socket, don't re-show overlay
+    if (_gpsUpdate) {
+      socket?.emit("sos:silent", {
+        userId: user?._id || user?.id || "demo-user",
+        lat, lng,
+        timestamp: new Date().toISOString(),
+        type,
+      });
+      addMapPin({ id: `s-gps-${Date.now()}`, type: "sos", coords: [lat, lng], risk: "critical" });
+      return;
+    }
+
     // Cancel any pending auto-SOS
     clearTimeout(autoTimerRef.current);
     clearInterval(countdownRef.current);
 
+    // Show overlay INSTANTLY — no GPS wait
+    const isOffline = !navigator.onLine;
     setSOSTriggered(true);
     setIsAutoSOS(type === "auto-sos");
-    setConfirmMessage("Help is coming. Stay calm.");
+    setConfirmMessage(isOffline ? "Alert saved. Sends when reconnected." : "Help is coming. Stay calm.");
     setEmergencyMode(false);
 
     addMapPin({ id: `s-${Date.now()}`, type: "sos", coords: [lat, lng], risk: "critical" });
@@ -91,11 +105,12 @@ export default function SOSPage() {
       type,
     });
 
+    // Auto dismiss after 15 seconds
     setTimeout(() => {
       setSOSTriggered(false);
       setConfirmMessage("");
       setIsAutoSOS(false);
-    }, 10000);
+    }, 15000);
   }, [socket, user, addMapPin]);
 
   const { tapCount, handleTap, tapsRequired } = useTapSOS({ onTrigger: handleSOSTriggered });

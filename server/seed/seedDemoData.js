@@ -114,10 +114,12 @@ async function seed() {
     ["transport", "rescue"]
   ];
 
+  const PHONE_PREFIXES = ["98765", "91234", "70011", "81234", "99876", "88765", "77654", "66543", "55432", "44321", "33210", "22109"];
   const volunteers = [];
   for (let i = 0; i < 12; i += 1) {
+    const volName = `Volunteer ${i + 1}`;
     const user = await User.create({
-      name: `Volunteer ${i + 1}`,
+      name: volName,
       email: `vol${i + 1}@sankatsahay.in`,
       password: demoHash,
       role: "volunteer",
@@ -126,10 +128,11 @@ async function seed() {
 
     volunteers.push({
       userId: user._id,
+      name: volName,
+      phone: `+91${PHONE_PREFIXES[i]}${String(i + 1).padStart(5, "0")}`,
       skills: skills[i],
       trustScore: 45 + i * 4,
-      availability: true,
-      status: "available",
+      availability: "available",
       language: i % 2 ? "hi" : "en",
       location: {
         type: "Point",

@@ -7,6 +7,14 @@ import useAppStore from "../store/useAppStore";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
+const DEMO_TASKS = [
+  { _id: "demo-1", type: "rescue", priority: "critical", title: "Rescue family trapped at Mahanadi riverbank", description: "Family of 4 stranded. Boat required.", location: { address: "Mahanadi Riverbank, Cuttack" }, requiredSkills: ["Boat Operation", "First Aid"], estimatedTime: "45 min", rewardCredits: 150, status: "open" },
+  { _id: "demo-2", type: "medical", priority: "high", title: "Medical aid at Kalinga Stadium camp", description: "Elderly patients need insulin and BP medication.", location: { address: "Kalinga Stadium, Bhubaneswar" }, requiredSkills: ["Medical", "Pharmacy"], estimatedTime: "30 min", rewardCredits: 100, status: "open" },
+  { _id: "demo-3", type: "food_delivery", priority: "medium", title: "Food distribution — 200 survivors at KIIT camp", description: "Distribute 200 food packets to registered survivors.", location: { address: "KIIT University, Patia" }, requiredSkills: ["Logistics"], estimatedTime: "1 hour", rewardCredits: 80, status: "open" },
+  { _id: "demo-4", type: "evacuation", priority: "high", title: "Evacuate elderly residents from Puri coastal zone", description: "12 elderly residents need transport to shelter.", location: { address: "Marine Drive, Puri" }, requiredSkills: ["Driving", "First Aid"], estimatedTime: "2 hours", rewardCredits: 120, status: "open" },
+  { _id: "demo-5", type: "search", priority: "critical", title: "Search for missing child — last seen Cuttack market", description: "8-year-old girl, Anaya Das, separated during flood evacuation.", location: { address: "College Square, Cuttack" }, requiredSkills: ["Search", "Communication"], estimatedTime: "Unknown", rewardCredits: 200, status: "open" },
+];
+
 const PRIORITY_STYLE = {
   critical: "bg-red-900/40 text-red-400 border-red-700/40",
   high:     "bg-amber-900/40 text-amber-400 border-amber-700/40",
@@ -181,29 +189,31 @@ export default function VolunteerDashboard() {
   }, []);
 
   const loadData = useCallback(async () => {
-    if (!volunteerId) return;
     try {
       const [tasksRes, profileRes, myRes] = await Promise.all([
         fetch(`${API}/tasks`),
-        fetch(`${API}/tasks/profile/${volunteerId}`),
-        fetch(`${API}/tasks/my-tasks/${volunteerId}`),
+        volunteerId ? fetch(`${API}/tasks/profile/${volunteerId}`) : Promise.resolve(null),
+        volunteerId ? fetch(`${API}/tasks/my-tasks/${volunteerId}`) : Promise.resolve(null),
       ]);
-      const tasksData   = await tasksRes.json();
-      const profileData = await profileRes.json();
-      const myData      = await myRes.json();
-      setOpenTasks(tasksData.tasks || []);
-      setProfile(profileData.volunteer || null);
-      setMyTasks(myData.tasks || []);
+      const tasksData = await tasksRes.json().catch(() => ({}));
+      setOpenTasks(tasksData.tasks?.length ? tasksData.tasks : DEMO_TASKS);
+      if (profileRes) {
+        const profileData = await profileRes.json().catch(() => ({}));
+        setProfile(profileData.volunteer || null);
+      }
+      if (myRes) {
+        const myData = await myRes.json().catch(() => ({}));
+        setMyTasks(myData.tasks || []);
+      }
     } catch {
-      // Fallback — show demo data if server unreachable
-      setOpenTasks([]);
+      // Fallback — show demo tasks if server unreachable
+      setOpenTasks(DEMO_TASKS);
     }
   }, [volunteerId]);
 
   useEffect(() => {
-    if (!volunteerId) { navigate("/volunteer-register"); return; }
     loadData();
-  }, [volunteerId, loadData, navigate]);
+  }, [loadData]);
 
   useEffect(() => {
     if (!socket) return;

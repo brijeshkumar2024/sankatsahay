@@ -36,91 +36,33 @@ function formatDistance(m) {
   return m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${m} metres`;
 }
 
-// ── Web Speech API — NO Tone.js ───────────────────────────────────────────────
-function speak(text, lang = "hi-IN") {
-  if (!window.speechSynthesis) return;
-  window.speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(text);
-  u.lang   = lang;
-  u.rate   = 0.85;
-  u.pitch  = 1;
-  u.volume = 1;
-  window.speechSynthesis.speak(u);
+function getDirectionMessage(bearing, dist, lang) {
+  const dir = getCardinalDirection(bearing);
+  const distStr = formatDistance(dist);
+  const isHi = lang.startsWith("hi");
+  const dirMap = isHi
+    ? { N: "सीधे आगे बढ़ें", NE: "उत्तर-पूर्व की ओर बढ़ें", E: "दाएं मुड़ें", SE: "दक्षिण-पूर्व की ओर बढ़ें", S: "पीछे मुड़ें", SW: "दक्षिण-पश्चिम की ओर बढ़ें", W: "बाएं मुड़ें", NW: "उत्तर-पश्चिम की ओर बढ़ें" }
+    : { N: "straight ahead", NE: "north-east", E: "right", SE: "south-east", S: "turn around", SW: "south-west", W: "left", NW: "north-west" };
+  return isHi
+    ? `${dirMap[dir] || dir}। ${distStr} बाकी है।`
+    : `Go ${dirMap[dir] || dir}. ${distStr} remaining.`;
 }
 
 // ── Language config ───────────────────────────────────────────────────────────
 const LANGUAGES = {
-  "hi-IN": {
-    label: "हिंदी",
-    messages: {
-      started:    (name) => `नेविगेशन शुरू। लक्ष्य: ${name}`,
-      forward:    "सीधे आगे बढ़ें",
-      left:       "बाईं ओर मुड़ें",
-      right:      "दाईं ओर मुड़ें",
-      turnAround: "पीछे मुड़ें",
-      arrived:    "आप पहुंच गए। आश्रय मिल गया।",
-      calm:       "घबराएं नहीं। मदद आ रही है।",
-      great:      "बहुत अच्छे! चलते रहें।",
-    },
-  },
-  "en-IN": {
-    label: "English",
-    messages: {
-      started:    (name) => `Navigation started. Target: ${name}`,
-      forward:    "Continue straight ahead",
-      left:       "Turn left",
-      right:      "Turn right",
-      turnAround: "Turn around",
-      arrived:    "You have arrived at the shelter.",
-      calm:       "Don't panic. Help is coming.",
-      great:      "Great! Keep moving.",
-    },
-  },
-  "or-IN": {
-    label: "ଓଡ଼ିଆ",
-    messages: {
-      started:    (name) => `ନେଭିଗେସନ ଆରମ୍ଭ। ଲକ୍ଷ୍ୟ: ${name}`,
-      forward:    "ସିଧା ଆଗକୁ ଯାଆନ୍ତୁ",
-      left:       "ବାମ ଦିଗକୁ ମୋଡ଼ନ୍ତୁ",
-      right:      "ଡାହାଣ ଦିଗକୁ ମୋଡ଼ନ୍ତୁ",
-      turnAround: "ପଛକୁ ଫେରନ୍ତୁ",
-      arrived:    "ଆପଣ ପହଞ୍ଚି ଗଲେ।",
-      calm:       "ଭୟ କରନ୍ତୁ ନାହିଁ। ସାହାଯ୍ୟ ଆସୁଛି।",
-      great:      "ବହୁତ ଭଲ! ଚାଲୁ ରୁହନ୍ତୁ।",
-    },
-  },
+  "hi-IN": { label: "हिंदी" },
+  "en-IN": { label: "English" },
+  "or-IN": { label: "ଓଡ଼ିଆ" },
 };
-
-// ── Panic check questions ─────────────────────────────────────────────────────
-const PANIC_CHECK_QUESTIONS = [
-  {
-    question: "क्या आप ठीक हैं? (Are you okay?)",
-    options: [
-      { text: "हां, ठीक हूं (Yes, I am fine)",       panic: false },
-      { text: "थोड़ा डरा हुआ हूं (Feeling scared)",   panic: true  },
-      { text: "बहुत डर लग रहा है (Very scared)",      panic: true  },
-    ],
-  },
-  {
-    question: "क्या आप चल सकते हैं? (Can you walk?)",
-    options: [
-      { text: "हां, चल सकता हूं (Yes)",    panic: false },
-      { text: "मुश्किल है (Difficult)",     panic: true  },
-      { text: "नहीं (No)",                  panic: true  },
-    ],
-  },
-  {
-    question: "क्या आप अकेले हैं? (Are you alone?)",
-    options: [
-      { text: "नहीं, साथ में हैं (No, with others)", panic: false },
-      { text: "हां, अकेला हूं (Yes, alone)",          panic: true  },
-      { text: "बच्चे साथ हैं (With children)",        panic: true  },
-    ],
-  },
-];
 
 // ── Arrow rotation by cardinal direction ──────────────────────────────────────
 const DIR_ROTATION = { N: 0, NE: 45, E: 90, SE: 135, S: 180, SW: 225, W: 270, NW: 315 };
+
+const SILENCE_WARNING_SECONDS = 20;
+const AUTO_SOS_SECONDS = 30;
+
+const EMERGENCY_WORDS = ["bachao", "help", "emergency", "madad", "बचाओ", "मदद", "trapped", "फंसा", "hurt", "injured"];
+const PANIC_WORDS     = ["dar", "scared", "afraid", "panic", "डर", "घबरा", "please help", "koi nahi"];
 
 // ── Component ─────────────────────────────────────────────────────────────────
 export default function SoundNav({
@@ -129,153 +71,289 @@ export default function SoundNav({
   target     = [20.305, 85.835],
   targetName = "Shelter",
   onArrived,
+  onSOSTrigger,
+  onStopNav,
   socket,
   user,
 }) {
   const resolvedLat = typeof targetLat === "number" ? targetLat : target[0];
   const resolvedLng = typeof targetLng === "number" ? targetLng : target[1];
 
-  const [audioStarted,    setAudioStarted]    = useState(false);
-  const [selectedLang,    setSelectedLang]    = useState("hi-IN");
-  const [direction,       setDirection]       = useState("N");
-  const [distance,        setDistance]        = useState(null);
-  const [isSpeaking,      setIsSpeaking]      = useState(false);
-  const [showPanicCheck,  setShowPanicCheck]  = useState(false);
-  const [panicDetected,   setPanicDetected]   = useState(false);
-  const [checkStep,       setCheckStep]       = useState(0);
-  const [currentPos,      setCurrentPos]      = useState({ lat: 20.2961, lng: 85.8245 });
+  const [audioStarted,     setAudioStarted]     = useState(false);
+  const [selectedLang,     setSelectedLang]      = useState("hi-IN");
+  const [direction,        setDirection]         = useState("N");
+  const [distance,         setDistance]          = useState(null);
+  const [isSpeaking,       setIsSpeaking]        = useState(false);
+  const [panicDetected,    setPanicDetected]     = useState(false);
+  const [aiActive,         setAiActive]          = useState(false);
+  const [autoSOSCountdown, setAutoSOSCountdown]  = useState(null);
+  const [currentPos,       setCurrentPos]        = useState({ lat: 20.2961, lng: 85.8245 });
 
+  const recognitionRef   = useRef(null);
+  const silenceTimerRef  = useRef(null);
+  const autoSOSTimerRef  = useRef(null);
   const navIntervalRef   = useRef(null);
-  const panicIntervalRef = useRef(null);
-  const cancelRef        = useRef(false);
+  const aiActiveRef      = useRef(false);
+  const distanceRef      = useRef(null);
+  const directionRef     = useRef("N");
 
-  const sayIt = useCallback((text) => {
+  // Keep refs in sync
+  useEffect(() => { aiActiveRef.current = aiActive; }, [aiActive]);
+  useEffect(() => { distanceRef.current = distance; }, [distance]);
+  useEffect(() => { directionRef.current = direction; }, [direction]);
+
+  // ── Core speak + listen ───────────────────────────────────────────────────
+  const speakAndListen = useCallback((text, lang) => {
+    const useLang = lang || selectedLang;
+    window.speechSynthesis.cancel();
     setIsSpeaking(true);
-    speak(text, selectedLang);
-    setTimeout(() => setIsSpeaking(false), 3000);
-  }, [selectedLang]);
-
-  // ── Start navigation ────────────────────────────────────────────────────────
-  const startNavigation = useCallback(() => {
-    setAudioStarted(true);
-    const msgs = LANGUAGES[selectedLang].messages;
-    sayIt(msgs.started(targetName));
-  }, [selectedLang, targetName, sayIt]);
-
-  // ── Navigation tick ─────────────────────────────────────────────────────────
-  const tick = useCallback(() => {
-    if (cancelRef.current) return;
-    const msgs = LANGUAGES[selectedLang].messages;
-
-    navigator.geolocation?.getCurrentPosition(
-      (pos) => {
-        if (cancelRef.current) return;
-        const lat  = pos.coords.latitude;
-        const lng  = pos.coords.longitude;
-        setCurrentPos({ lat, lng });
-
-        const dist = getDistance(lat, lng, resolvedLat, resolvedLng);
-        const bear = getBearing(lat, lng, resolvedLat, resolvedLng);
-        const dir  = getCardinalDirection(bear);
-
-        setDistance(dist);
-        setDirection(dir);
-
-        if (dist < 30) {
-          sayIt(msgs.arrived);
-          navigator.vibrate?.([200, 100, 200, 100, 200]);
-          cancelRef.current = true;
-          clearInterval(navIntervalRef.current);
-          onArrived?.();
-          return;
-        }
-
-        const isForward = ["N", "NE", "NW"].includes(dir);
-        const isLeft    = ["W", "SW"].includes(dir);
-        const isRight   = ["E", "SE"].includes(dir);
-
-        if (isForward) {
-          sayIt(`${msgs.forward}. ${formatDistance(dist)} remaining.`);
-          navigator.vibrate?.([200, 100, 200]);
-        } else if (isLeft) {
-          sayIt(msgs.left);
-          navigator.vibrate?.([200, 100, 200, 100, 200]);
-        } else if (isRight) {
-          sayIt(msgs.right);
-          navigator.vibrate?.([500]);
-        } else {
-          sayIt(msgs.turnAround);
-          navigator.vibrate?.([1000]);
-        }
-      },
-      () => sayIt("Continuing navigation. Follow the arrow."),
-      { timeout: 5000, maximumAge: 10000 }
-    );
-  }, [selectedLang, resolvedLat, resolvedLng, sayIt, onArrived]);
-
-  // ── Start intervals after audio enabled ────────────────────────────────────
-  useEffect(() => {
-    if (!audioStarted) return undefined;
-    cancelRef.current = false;
-
-    tick();
-    navIntervalRef.current = setInterval(tick, 5000);
-
-    // Panic check every 60 seconds
-    panicIntervalRef.current = setInterval(() => {
-      if (cancelRef.current) return;
-      const q = PANIC_CHECK_QUESTIONS[checkStep % PANIC_CHECK_QUESTIONS.length];
-      setShowPanicCheck(true);
-      speak(q.question, selectedLang);
-    }, 60000);
-
-    return () => {
-      cancelRef.current = true;
-      clearInterval(navIntervalRef.current);
-      clearInterval(panicIntervalRef.current);
-      window.speechSynthesis?.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang   = useLang;
+    u.rate   = 0.88;
+    u.pitch  = 1.1;
+    u.volume = 1;
+    const voices = window.speechSynthesis.getVoices();
+    const preferred = voices.find(v =>
+      v.lang.startsWith(useLang.split("-")[0]) &&
+      (v.name.includes("Female") || v.name.includes("female") || v.name.includes("Priya"))
+    ) || voices.find(v => v.lang.startsWith(useLang.split("-")[0]));
+    if (preferred) u.voice = preferred;
+    u.onend = () => {
+      setIsSpeaking(false);
+      if (aiActiveRef.current) startContinuousListening();
     };
-  }, [audioStarted]); // eslint-disable-line react-hooks/exhaustive-deps
+    window.speechSynthesis.speak(u);
+  }, [selectedLang]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Handle panic answer ─────────────────────────────────────────────────────
-  const handlePanicAnswer = useCallback((option) => {
-    setShowPanicCheck(false);
-    setCheckStep((prev) => prev + 1);
-    const msgs = LANGUAGES[selectedLang].messages;
-
-    if (option.panic) {
-      setPanicDetected(true);
-      sayIt(msgs.calm);
-      navigator.vibrate?.([500, 200, 500]);
-      socket?.emit("sos:silent", {
-        userId: user?._id || user?.id || "demo-user",
-        lat: currentPos.lat,
-        lng: currentPos.lng,
-        type: "panic-detected-during-navigation",
-        timestamp: new Date().toISOString(),
-      });
-    } else {
-      sayIt(msgs.great);
+  // ── Continuous speech recognition ─────────────────────────────────────────
+  const startContinuousListening = useCallback(() => {
+    if (recognitionRef.current) {
+      try { recognitionRef.current.stop(); } catch (_) {}
     }
-  }, [selectedLang, sayIt, socket, user, currentPos]);
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) return;
 
-  const handleEmergencySOS = useCallback(() => {
-    const msgs = LANGUAGES[selectedLang].messages;
-    sayIt(msgs.calm);
-    socket?.emit("sos:silent", {
-      userId: user?._id || user?.id || "demo-user",
+    const recognition = new SR();
+    recognition.lang            = selectedLang;
+    recognition.continuous      = true;
+    recognition.interimResults  = false;
+
+    recognition.onresult = async (event) => {
+      const text = event.results[event.results.length - 1][0].transcript;
+      resetSilenceTimer();
+
+      if (EMERGENCY_WORDS.some(w => text.toLowerCase().includes(w))) {
+        handleEmergencyVoice(); return;
+      }
+      if (PANIC_WORDS.some(w => text.toLowerCase().includes(w))) {
+        handlePanicVoice(); return;
+      }
+      await sendVoiceToAI(text);
+    };
+
+    recognition.onerror = () => {};
+
+    recognition.onend = () => {
+      if (aiActiveRef.current) setTimeout(() => startContinuousListening(), 500);
+    };
+
+    recognitionRef.current = recognition;
+    try { recognition.start(); } catch (_) {}
+  }, [selectedLang]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Send to NVIDIA AI ──────────────────────────────────────────────────────
+  const sendVoiceToAI = async (userText) => {
+    try {
+      const res = await fetch("/api/ai/voice-chat", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: [
+            {
+              role: "system",
+              content: `You are SankatBot guiding someone to ${targetName} emergency shelter during a disaster.
+Distance remaining: ${formatDistance(distanceRef.current || 0)}.
+Direction: ${directionRef.current}.
+Be very brief — max 1-2 sentences. Respond in same language as user. Always end with encouragement.`,
+            },
+            { role: "user", content: userText },
+          ],
+          language: selectedLang,
+        }),
+      });
+      const data = await res.json();
+      speakAndListen(data.response, selectedLang);
+    } catch {
+      const fallback = selectedLang.startsWith("hi")
+        ? "चलते रहें। आप सही रास्ते पर हैं।"
+        : "Keep moving. You are on the right path.";
+      speakAndListen(fallback);
+    }
+  };
+
+  // ── Silence / auto-SOS timer ───────────────────────────────────────────────
+  const triggerAutoSOS = useCallback(() => {
+    const msg = selectedLang.startsWith("hi")
+      ? "मदद बुलाई जा रही है।"
+      : "Help is being called. Stay where you are.";
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(msg);
+    u.lang = selectedLang;
+    window.speechSynthesis.speak(u);
+    navigator.vibrate?.([500, 200, 500, 200, 500]);
+    const sosPayload = {
       lat: currentPos.lat,
       lng: currentPos.lng,
-      type: "emergency-button-navigation",
+      type: "auto-sos-silence",
+      reason: "No voice or touch detected for 50 seconds during navigation",
       timestamp: new Date().toISOString(),
-    });
+    };
+    onSOSTrigger?.(sosPayload);
+    socket?.emit("sos:silent", { userId: user?._id || user?.id || "demo-user", ...sosPayload });
+    setAutoSOSCountdown(null);
+  }, [selectedLang, currentPos, onSOSTrigger, socket, user]);
+
+  const resetSilenceTimer = useCallback(() => {
+    clearTimeout(silenceTimerRef.current);
+    clearInterval(autoSOSTimerRef.current);
+    setAutoSOSCountdown(null);
+
+    silenceTimerRef.current = setTimeout(() => {
+      const question = selectedLang.startsWith("hi")
+        ? "क्या आप ठीक हैं? कुछ बोलिए या स्क्रीन छूइए।"
+        : "Are you okay? Please speak or touch the screen.";
+      speakAndListen(question);
+
+      let count = AUTO_SOS_SECONDS;
+      setAutoSOSCountdown(count);
+      autoSOSTimerRef.current = setInterval(() => {
+        count -= 1;
+        setAutoSOSCountdown(count);
+        if (count <= 0) {
+          clearInterval(autoSOSTimerRef.current);
+          triggerAutoSOS();
+        }
+      }, 1000);
+    }, SILENCE_WARNING_SECONDS * 1000);
+  }, [selectedLang, speakAndListen, triggerAutoSOS]);
+
+  // ── Panic / emergency handlers ─────────────────────────────────────────────
+  const handlePanicVoice = useCallback(() => {
     setPanicDetected(true);
-  }, [selectedLang, sayIt, socket, user, currentPos]);
+    const msg = selectedLang.startsWith("hi")
+      ? "घबराइए नहीं। आप सुरक्षित हैं। मैं आपके साथ हूं। गहरी सांस लें। अभी सीधे चलते रहें।"
+      : "Do not panic. You are safe. I am with you. Take a deep breath. Keep walking straight.";
+    speakAndListen(msg);
+    navigator.vibrate?.([500, 200, 500]);
+    setTimeout(() => setPanicDetected(false), 30000);
+  }, [selectedLang, speakAndListen]);
+
+  const handleEmergencyVoice = useCallback(() => {
+    const msg = selectedLang.startsWith("hi")
+      ? "आपका SOS भेजा जा रहा है। मदद आ रही है। रुकिए मत।"
+      : "Sending your SOS. Help is coming. Keep moving.";
+    speakAndListen(msg);
+    navigator.vibrate?.([1000, 500, 1000]);
+    const sosPayload = {
+      lat: currentPos.lat,
+      lng: currentPos.lng,
+      type: "voice-emergency",
+      timestamp: new Date().toISOString(),
+    };
+    onSOSTrigger?.(sosPayload);
+    socket?.emit("sos:silent", { userId: user?._id || user?.id || "demo-user", ...sosPayload });
+  }, [selectedLang, speakAndListen, currentPos, onSOSTrigger, socket, user]);
+
+  // ── Touch resets silence timer ─────────────────────────────────────────────
+  useEffect(() => {
+    if (!audioStarted) return;
+    const handleTouch = () => {
+      resetSilenceTimer();
+      setAutoSOSCountdown(null);
+      clearInterval(autoSOSTimerRef.current);
+    };
+    window.addEventListener("touchstart", handleTouch);
+    window.addEventListener("click", handleTouch);
+    return () => {
+      window.removeEventListener("touchstart", handleTouch);
+      window.removeEventListener("click", handleTouch);
+    };
+  }, [audioStarted, resetSilenceTimer]);
+
+  // ── Start navigation ───────────────────────────────────────────────────────
+  const handleStartNavigation = useCallback(async () => {
+    await window.speechSynthesis.resume?.();
+    setAudioStarted(true);
+    setAiActive(true);
+    aiActiveRef.current = true;
+
+    const greeting = selectedLang.startsWith("hi")
+      ? `ठीक है। मैं आपको ${targetName} तक ले जाऊंगा। रास्ते में कुछ भी पूछ सकते हैं। चलिए शुरू करते हैं।`
+      : `Okay. I will guide you to ${targetName}. You can ask me anything on the way. Let us begin.`;
+
+    speakAndListen(greeting);
+    resetSilenceTimer();
+
+    navIntervalRef.current = setInterval(() => {
+      if (!aiActiveRef.current) { clearInterval(navIntervalRef.current); return; }
+
+      navigator.geolocation?.getCurrentPosition(
+        (pos) => {
+          const lat  = pos.coords.latitude;
+          const lng  = pos.coords.longitude;
+          setCurrentPos({ lat, lng });
+
+          const dist = getDistance(lat, lng, resolvedLat, resolvedLng);
+          const bear = getBearing(lat, lng, resolvedLat, resolvedLng);
+          const dir  = getCardinalDirection(bear);
+          setDistance(dist);
+          setDirection(dir);
+
+          if (dist < 30) {
+            const arrivedMsg = selectedLang.startsWith("hi")
+              ? "आप पहुंच गए। राहत शिविर में प्रवेश करें।"
+              : "You have arrived. Please enter the relief camp.";
+            speakAndListen(arrivedMsg);
+            navigator.vibrate?.([200, 100, 200, 100, 200]);
+            stopNavigation();
+            onArrived?.();
+            return;
+          }
+
+          if (!window.speechSynthesis.speaking) {
+            speakAndListen(getDirectionMessage(bear, dist, selectedLang));
+          }
+        },
+        () => {
+          // GPS failed — decrement demo distance
+          setDistance(prev => Math.max(0, (prev ?? 500) - 50));
+        },
+        { timeout: 5000, maximumAge: 10000 }
+      );
+    }, 5000);
+  }, [selectedLang, targetName, resolvedLat, resolvedLng, speakAndListen, resetSilenceTimer, onArrived]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Stop navigation ────────────────────────────────────────────────────────
+  const stopNavigation = useCallback(() => {
+    setAudioStarted(false);
+    setAiActive(false);
+    aiActiveRef.current = false;
+    window.speechSynthesis.cancel();
+    try { recognitionRef.current?.stop(); } catch (_) {}
+    clearInterval(navIntervalRef.current);
+    clearTimeout(silenceTimerRef.current);
+    clearInterval(autoSOSTimerRef.current);
+    setAutoSOSCountdown(null);
+    setPanicDetected(false);
+    onStopNav?.();
+  }, [onStopNav]);
+
+  // ── Cleanup on unmount ─────────────────────────────────────────────────────
+  useEffect(() => () => stopNavigation(), []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const arrowRotation = DIR_ROTATION[direction] ?? 0;
-  const currentQ      = PANIC_CHECK_QUESTIONS[checkStep % PANIC_CHECK_QUESTIONS.length];
 
-  // ── Pre-start screen ────────────────────────────────────────────────────────
+  // ── Pre-start screen ───────────────────────────────────────────────────────
   if (!audioStarted) {
     return (
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "16px", padding: "32px 16px", textAlign: "center" }}>
@@ -283,7 +361,6 @@ export default function SoundNav({
           Voice navigation guides you to <strong style={{ color: "#F3F7FB" }}>{targetName}</strong> in your language.
         </p>
 
-        {/* Language selector */}
         <div style={{ display: "flex", gap: "8px" }}>
           {Object.entries(LANGUAGES).map(([code, cfg]) => (
             <button
@@ -302,7 +379,7 @@ export default function SoundNav({
         </div>
 
         <button
-          onClick={startNavigation}
+          onClick={handleStartNavigation}
           style={{ padding: "18px 40px", borderRadius: "14px", background: "#10B981", color: "#fff", border: "none", fontSize: "18px", fontWeight: "bold", cursor: "pointer" }}
         >
           Tap to Enable Voice Navigation
@@ -312,12 +389,39 @@ export default function SoundNav({
     );
   }
 
-  // ── Active navigation screen ────────────────────────────────────────────────
+  // ── Active navigation screen ───────────────────────────────────────────────
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "12px", padding: "16px", textAlign: "center", position: "relative" }}>
 
+      {/* Auto-SOS countdown banner */}
+      {autoSOSCountdown !== null && (
+        <div style={{
+          position: "fixed", top: 0, left: 0, right: 0,
+          background: "#7F1D1D", padding: "12px", textAlign: "center", zIndex: 9999,
+        }}>
+          <p style={{ color: "white", fontSize: "14px", margin: 0 }}>
+            {selectedLang.startsWith("hi")
+              ? `SOS ${autoSOSCountdown} सेकंड में — ठीक हों तो स्क्रीन छूएं`
+              : `SOS in ${autoSOSCountdown}s — touch screen if okay`}
+          </p>
+          <button
+            onClick={() => {
+              clearInterval(autoSOSTimerRef.current);
+              setAutoSOSCountdown(null);
+              speakAndListen(selectedLang.startsWith("hi") ? "ठीक है। चलते रहें।" : "Okay. Keep moving.");
+            }}
+            style={{
+              marginTop: "8px", padding: "6px 20px", background: "#10B981",
+              color: "white", border: "none", borderRadius: "8px", cursor: "pointer",
+            }}
+          >
+            {selectedLang.startsWith("hi") ? "मैं ठीक हूं" : "I am okay"}
+          </button>
+        </div>
+      )}
+
       {/* Target name */}
-      <p style={{ color: "#9CA3AF", fontSize: "13px" }}>
+      <p style={{ color: "#9CA3AF", fontSize: "13px", marginTop: autoSOSCountdown !== null ? "80px" : "0" }}>
         Navigating to <strong style={{ color: "#F3F7FB" }}>{targetName}</strong>
       </p>
 
@@ -364,56 +468,62 @@ export default function SoundNav({
 
       {/* Speaking indicator */}
       <p style={{ fontSize: "12px", color: isSpeaking ? "#10B981" : "#4B5563", margin: 0 }}>
-        {isSpeaking ? "🔊 Speaking…" : "🔇 Listening for GPS…"}
+        {isSpeaking ? "🔊 Speaking…" : "🎙️ Listening…"}
       </p>
 
-      {/* Panic reversal overlay */}
+      {/* Panic calm banner */}
+      {panicDetected && (
+        <div style={{
+          position: "fixed", bottom: 0, left: 0, right: 0,
+          background: "#1F2937", borderTop: "2px solid #10B981",
+          padding: "20px", textAlign: "center", zIndex: 9998,
+        }}>
+          <p style={{ color: "#10B981", fontSize: "18px", marginBottom: "8px" }}>
+            {selectedLang.startsWith("hi") ? "शांत रहें। आप सुरक्षित हैं।" : "Stay calm. You are safe."}
+          </p>
+          <p style={{ color: "#9CA3AF", fontSize: "14px", margin: 0 }}>
+            {selectedLang.startsWith("hi") ? "गहरी सांस लें और चलते रहें" : "Take deep breaths and keep walking"}
+          </p>
+          <button
+            onClick={() => setPanicDetected(false)}
+            style={{ marginTop: "12px", padding: "6px 20px", background: "#10B981", color: "white", border: "none", borderRadius: "8px", cursor: "pointer" }}
+          >
+            {selectedLang.startsWith("hi") ? "ठीक हूं" : "I am okay"}
+          </button>
+        </div>
+      )}
+
+      {/* Panic reversal overlay (full-screen) */}
       {panicDetected && (
         <PanicReversal
           isActive
           onDismiss={() => {
             setPanicDetected(false);
-            sayIt(LANGUAGES[selectedLang].messages.great);
+            speakAndListen(selectedLang.startsWith("hi") ? "बहुत अच्छे! चलते रहें।" : "Great! Keep moving.");
           }}
         />
       )}
 
-      {/* Panic check bottom sheet */}
-      {showPanicCheck && !panicDetected && (
-        <div style={{
-          position: "fixed", bottom: 0, left: 0, right: 0,
-          background: "#111827", border: "1px solid rgba(255,255,255,0.1)",
-          borderRadius: "20px 20px 0 0", padding: "24px", zIndex: 9999,
-        }}>
-          <p style={{ color: "#F9FAFB", fontSize: "18px", marginBottom: "16px", textAlign: "center" }}>
-            {currentQ.question}
-          </p>
-          <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-            {currentQ.options.map((opt, i) => (
-              <button
-                key={i}
-                onClick={() => handlePanicAnswer(opt)}
-                style={{
-                  padding: "16px", borderRadius: "12px", cursor: "pointer", textAlign: "left",
-                  border: "1px solid rgba(255,255,255,0.2)", fontSize: "15px", color: "white",
-                  background: opt.panic ? "rgba(239,68,68,0.15)" : "rgba(16,185,129,0.15)",
-                }}
-              >
-                {opt.text}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
+      {/* Stop navigation */}
+      <button
+        onClick={stopNavigation}
+        style={{
+          marginTop: "8px", padding: "10px 24px", borderRadius: "10px",
+          background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.4)",
+          color: "#EF4444", fontSize: "14px", cursor: "pointer",
+        }}
+      >
+        {selectedLang.startsWith("hi") ? "नेविगेशन बंद करें" : "Stop Navigation"}
+      </button>
 
       {/* Fixed emergency SOS button */}
       <button
-        onClick={handleEmergencySOS}
+        onClick={handleEmergencyVoice}
         style={{
           position: "fixed", bottom: "24px", right: "24px",
           width: "70px", height: "70px", borderRadius: "50%",
           background: "#EF4444", color: "white", border: "none",
-          fontSize: "12px", fontWeight: "bold", cursor: "pointer", zIndex: 9998,
+          fontSize: "12px", fontWeight: "bold", cursor: "pointer", zIndex: 9997,
           boxShadow: "0 0 0 4px rgba(239,68,68,0.3)",
         }}
       >

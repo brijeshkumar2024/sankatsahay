@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { AnimatePresence } from "framer-motion";
 import Navbar from "./components/shared/Navbar";
@@ -34,6 +35,14 @@ export default function App() {
   const token  = useAppStore((s) => s.token) || localStorage.getItem("sankat-token");
   const socket = useSocket(token);
   useDemoFlowSync(socket);
+
+  // Story mode auto-navigation
+  useEffect(() => {
+    if (!socket) return;
+    const onNavigate = ({ path }) => navigate(path);
+    socket.on("demo:navigate", onNavigate);
+    return () => socket.off("demo:navigate", onNavigate);
+  }, [socket, navigate]);
 
   return (
     <div className="min-h-screen bg-bg text-text">

@@ -29,14 +29,16 @@ export function useTapSOS({ onTrigger }) {
       setTapCount(0);
       clearTimeout(timerRef.current);
 
+      // Fire overlay INSTANTLY with fallback coords — no GPS wait
+      onTrigger({ lat: 20.2961, lng: 85.8245, timestamp: new Date().toISOString() });
+
+      // Get real GPS in background (for the socket emit — overlay already shown)
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
-          (pos) => onTrigger({ lat: pos.coords.latitude, lng: pos.coords.longitude, timestamp: new Date().toISOString() }),
-          ()    => onTrigger({ lat: 20.2961, lng: 85.8245, timestamp: new Date().toISOString() }),
-          { timeout: 3000, maximumAge: 60000 }
+          (pos) => onTrigger({ lat: pos.coords.latitude, lng: pos.coords.longitude, timestamp: new Date().toISOString(), _gpsUpdate: true }),
+          () => {},
+          { timeout: 5000, maximumAge: 60000 }
         );
-      } else {
-        onTrigger({ lat: 20.2961, lng: 85.8245, timestamp: new Date().toISOString() });
       }
     }
   }, [onTrigger]);
