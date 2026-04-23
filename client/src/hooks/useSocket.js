@@ -8,9 +8,10 @@ export default function useSocket(token) {
   const connectedTokenRef = useRef(undefined);
 
   useEffect(() => {
-    // Avoid reconnecting when token hasn't actually changed
-    if (connectedTokenRef.current === token) return;
-    connectedTokenRef.current = token;
+    // connectedTokenRef uses a sentinel so null token still connects once
+    const tokenKey = token ?? "__anonymous__";
+    if (connectedTokenRef.current === tokenKey) return;
+    connectedTokenRef.current = tokenKey;
 
     const nextSocket = io(
       import.meta.env.VITE_SOCKET_URL || "http://localhost:5000",

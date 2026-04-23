@@ -70,6 +70,17 @@ cron.schedule("0 * * * *", async () => {
 
 const port = Number(process.env.PORT || 5000);
 
+httpServer.on("error", (err) => {
+  if (err.code === "EADDRINUSE") {
+    // eslint-disable-next-line no-console
+    console.error(`Port ${port} is already in use. Kill the old process and restart.`);
+    // Exit cleanly so nodemon doesn't crash-loop
+    process.exit(1);
+  } else {
+    throw err;
+  }
+});
+
 httpServer.listen(port, () => {
   // eslint-disable-next-line no-console
   console.log(`Server running on port ${port}`);
