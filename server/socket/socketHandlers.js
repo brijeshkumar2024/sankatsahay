@@ -62,49 +62,64 @@ export function registerSocketHandlers(io) {
     });
 
     socket.on("sos:silent", async (payload) => {
-      const { lat, lng, userId, timestamp } = payload;
-      const alert = await SOSAlert.create({
-        userId,
-        mode: "tap",
-        status: "active",
-        message: "Silent SOS from tap trigger",
-        location: {
-          type: "Point",
-          coordinates: [lng, lat]
-        },
-        createdAt: timestamp ? new Date(timestamp) : undefined
-      });
+      try {
+        const { lat, lng, userId, timestamp } = payload;
 
-      io.to("admin-room").emit("sos:new", {
-        id: alert._id,
-        userId,
-        lat,
-        lng,
-        status: alert.status,
-        mode: alert.mode,
-        createdAt: alert.createdAt
-      });
+        // Guard: only pass userId if it looks like a valid MongoDB ObjectId.
+        // The demo client sends "demo-user" which is not a valid ObjectId
+        // and causes a Mongoose cast error that crashes the server.
+        const mongoose = (await import("mongoose")).default;
+        const safeUserId = mongoose.isValidObjectId(userId) ? userId : undefined;
 
-      const user = userId ? await User.findById(userId) : null;
-      const contacts = user?.emergencyContacts || [];
-      for (const c of contacts) {
-        if (c.phone) {
-          await sendSMS(c.phone, `SANKATSAHAY: Silent SOS from ${user.name || "user"} at ${new Date().toLocaleTimeString()}.`);
+        const alert = await SOSAlert.create({
+          userId: safeUserId,
+          mode: "tap",
+          status: "active",
+          message: "Silent SOS from tap trigger",
+          location: {
+            type: "Point",
+            coordinates: [Number(lng) || 85.8245, Number(lat) || 20.2961]
+          },
+          createdAt: timestamp ? new Date(timestamp) : undefined
+        });
+
+        io.to("admin-room").emit("sos:new", {
+          id: alert._id,
+          userId: safeUserId,
+          lat,
+          lng,
+          status: alert.status,
+          mode: alert.mode,
+          createdAt: alert.createdAt
+        });
+
+        const user = safeUserId ? await User.findById(safeUserId).catch(() => null) : null;
+        const contacts = user?.emergencyContacts || [];
+        for (const c of contacts) {
+          if (c.phone) {
+            await sendSMS(c.phone, `SANKATSAHAY: Silent SOS from ${user.name || "user"} at ${new Date().toLocaleTimeString()}.`);
+          }
         }
-      }
-      if (process.env.ADMIN_PHONE_NUMBER) {
-        await sendSMS(process.env.ADMIN_PHONE_NUMBER, `SANKATSAHAY ADMIN ALERT: Silent SOS detected near ${lat}, ${lng}`);
+        if (process.env.ADMIN_PHONE_NUMBER) {
+          await sendSMS(process.env.ADMIN_PHONE_NUMBER, `SANKATSAHAY ADMIN ALERT: Silent SOS detected near ${lat}, ${lng}`);
+        }
+      } catch (err) {
+        // Never crash the server on a bad SOS payload
+        // eslint-disable-next-line no-console
+        console.error("sos:silent error:", err.message);
       }
     });
 
     socket.on("sos:auto-alert", async (data) => {
       try {
+        const mongoose = (await import("mongoose")).default;
+        const safeUserId = mongoose.isValidObjectId(data.userId) ? data.userId : undefined;
         const alert = await SOSAlert.create({
-          userId: data.userId,
+          userId: safeUserId,
           mode: "auto",
           status: "active",
           message: data.reason,
-          location: { type: "Point", coordinates: [data.lng, data.lat] },
+          location: { type: "Point", coordinates: [Number(data.lng) || 85.8245, Number(data.lat) || 20.2961] },
           createdAt: data.timestamp ? new Date(data.timestamp) : undefined
         });
         io.to("admin-room").emit("sos:new", {
@@ -113,7 +128,7 @@ export function registerSocketHandlers(io) {
         });
       } catch (err) {
         // eslint-disable-next-line no-console
-        console.error("Auto-alert error:", err);
+        console.error("Auto-alert error:", err.message);
       }
     });
 
@@ -156,28 +171,42 @@ export function registerSocketHandlers(io) {
     });
 
     socket.on("bluetooth:ping", async (payload) => {
-      const { lat, lng, userId, deviceCount } = payload;
-      await SensorPing.create({
-        type: "bluetooth",
-        userId,
-        location: { type: "Point", coordinates: [lng, lat] },
-        payload
-      });
-      io.to("admin-room").emit("bluetooth:ping", {
-        ...payload,
-        label: `${deviceCount} devices detected - possible survivors 45m away`
-      });
+      try {
+        const { lat, lng, userId, deviceCount } = payload;
+        const mongoose = (await import("mongoose")).default;
+        const safeUserId = mongoose.isValidObjectId(userId) ? userId : undefined;
+        await SensorPing.create({
+          type: "bluetooth",
+          userId: safeUserId,
+          location: { type: "Point", coordinates: [Number(lng) || 85.8245, Number(lat) || 20.2961] },
+          payload
+        });
+        io.to("admin-room").emit("bluetooth:ping", {
+          ...payload,
+          label: `${deviceCount} devices detected - possible survivors 45m away`
+        });
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error("bluetooth:ping error:", err.message);
+      }
     });
 
     socket.on("sensor:distress", async (payload) => {
-      const { lat, lng, userId } = payload;
-      await SensorPing.create({
-        type: "distress",
-        userId,
-        location: { type: "Point", coordinates: [lng, lat] },
-        payload
-      });
-      io.to("admin-room").emit("sensor:distress", payload);
+      try {
+        const { lat, lng, userId } = payload;
+        const mongoose = (await import("mongoose")).default;
+        const safeUserId = mongoose.isValidObjectId(userId) ? userId : undefined;
+        await SensorPing.create({
+          type: "distress",
+          userId: safeUserId,
+          location: { type: "Point", coordinates: [Number(lng) || 85.8245, Number(lat) || 20.2961] },
+          payload
+        });
+        io.to("admin-room").emit("sensor:distress", payload);
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error("sensor:distress error:", err.message);
+      }
     });
 
     socket.on("disconnect", () => {
