@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { syncDemoStep } from "../hooks/useDemoFlow";
 
 // ─── DEMO CONTROL FLAG ────────────────────────────────────────────────────────
 export const DEMO_UI_MODE = true;
@@ -58,11 +59,8 @@ const useDemoStore = create((set, get) => ({
           : null,
         transitioning: false,
       });
-      // ── Bridge to useDemoFlowStore so useActiveAnimation stays in sync ──
-      // Import is deferred to avoid circular dependency at module load time
-      import("../hooks/useDemoFlow").then(({ syncDemoStep }) => {
-        syncDemoStep(PHASE_TO_FLOW_STEP[def.phase] ?? "idle");
-      });
+      // Sync useDemoFlowStore so useActiveAnimation() returns correct values
+      syncDemoStep(PHASE_TO_FLOW_STEP[def.phase] ?? "idle");
     }, 300);
   },
 
@@ -80,6 +78,9 @@ const useDemoStore = create((set, get) => ({
 
   setBanner: (message, severity = "watch") =>
     set({ bannerMessage: message, bannerSeverity: severity }),
+
+  // Directly set the active animation — used by socket event handlers
+  setActiveAnimation: (activeAnimation) => set({ activeAnimation }),
 }));
 
 export default useDemoStore;
