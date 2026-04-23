@@ -45,6 +45,25 @@ export default function SimulationControlPanel() {
       .catch(() => {});
   }, []);
 
+  useEffect(() => {
+    if (!socket) return;
+
+    const onConnect = () => setStatus("Live connection established");
+    const onDisconnect = () => setStatus("Socket disconnected - reconnecting...");
+
+    if (socket.connected) {
+      setStatus("Live connection established");
+    }
+
+    socket.on("connect", onConnect);
+    socket.on("disconnect", onDisconnect);
+
+    return () => {
+      socket.off("connect", onConnect);
+      socket.off("disconnect", onDisconnect);
+    };
+  }, [socket]);
+
   const send = async (command, payload = {}) => {
     if (socket?.connected) {
       socket.emit(command, payload);

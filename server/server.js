@@ -2,10 +2,10 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
-import http from "http";
+import { createServer } from "http";
 import cron from "node-cron";
 import { Server } from "socket.io";
-import { connectDB } from "./config/db.js";
+import connectDB from "./db.js";
 import { basicRateLimit } from "./middleware/rateLimit.js";
 import { registerSocketHandlers } from "./socket/socketHandlers.js";
 import { runPredictionJob } from "./services/predictionService.js";
@@ -23,17 +23,20 @@ import sensorsRoutes from "./routes/sensors.js";
 import simulationRoutes from "./routes/simulation.js";
 
 const app = express();
-const server = http.createServer(app);
+const httpServer = createServer(app);
 const allowedOrigins = [
   process.env.CLIENT_URL || "http://localhost:5173",
   process.env.SIM_CONTROL_URL || "http://localhost:5173"
 ];
-const io = new Server(server, {
+const io = new Server(httpServer, {
   cors: {
-    origin: allowedOrigins,
-    methods: ["GET", "POST", "PATCH"]
+    origin: "http://localhost:5173",
+    methods: ["GET", "POST"]
   }
 });
+
+// Connect DB before registering routes.
+await connectDB();
 
 app.set("io", io);
 app.use(helmet());
@@ -67,16 +70,7 @@ cron.schedule("0 * * * *", async () => {
 
 const port = Number(process.env.PORT || 5000);
 
-async function bootstrap() {
-  await connectDB(process.env.MONGODB_URI);
-  server.listen(port, () => {
-    // eslint-disable-next-line no-console
-    console.log(`Server running on port ${port}`);
-  });
-}
-
-bootstrap().catch((err) => {
+httpServer.listen(port, () => {
   // eslint-disable-next-line no-console
-  console.error("Failed to start server", err);
-  process.exit(1);
+  console.log(`Server running on port ${port}`);
 });
