@@ -15,11 +15,12 @@ export default function Navbar() {
   const { currentStep } = useDemoFlow();
   const links = DEMO_MODE
     ? [
-      ["/dashboard", "Map"],
-      ["/sos", "SOS"],
-      ["/family", "Family"],
-      ["/volunteer", "Volunteer"],
-      ["/admin", "Resolution"]
+      ["/dashboard",           "Map"],
+      ["/sos",                 "SOS"],
+      ["/family",              "Family"],
+      ["/volunteer-register",  "Join Volunteer"],
+      ["/volunteer-dashboard", "My Tasks"],
+      ["/admin",               "Admin"],
     ]
     : DEFAULT_LINKS;
 

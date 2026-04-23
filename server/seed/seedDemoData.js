@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { connectDB } from "../config/db.js";
 import User from "../models/User.js";
 import Volunteer from "../models/Volunteer.js";
+import Task from "../models/Task.js";
 import SOSAlert from "../models/SOSAlert.js";
 import Shelter from "../models/Shelter.js";
 import FamilyGroup from "../models/FamilyGroup.js";
@@ -14,6 +15,7 @@ async function seed() {
   await Promise.all([
     User.deleteMany({}),
     Volunteer.deleteMany({}),
+    Task.deleteMany({}),
     SOSAlert.deleteMany({}),
     Shelter.deleteMany({}),
     FamilyGroup.deleteMany({}),
@@ -173,6 +175,64 @@ async function seed() {
     { userId: demoUser._id, mode: "manual", status: "resolved", location: { type: "Point", coordinates: [85.82, 20.29] } },
     { userId: demoUser._id, mode: "auto", status: "active", location: { type: "Point", coordinates: [85.83, 20.31] } },
     { userId: demoUser._id, mode: "tap", status: "responding", location: { type: "Point", coordinates: [85.84, 20.28] } }
+  ]);
+
+  await Task.insertMany([
+    {
+      title: "Food distribution — Puri coastal area",
+      type: "food_delivery",
+      priority: "critical",
+      status: "open",
+      description: "Distribute food packets to 200+ families stranded near Puri beach road after cyclone.",
+      location: { type: "Point", coordinates: [85.8312, 19.8135], address: "Puri Beach Road" },
+      requiredSkills: ["food"],
+      estimatedTime: "2 hours",
+      rewardCredits: 20,
+    },
+    {
+      title: "Medical aid — injured family near Cuttack bridge",
+      type: "medical",
+      priority: "critical",
+      status: "open",
+      description: "Family of 4 with injuries from collapsed wall. Need first aid and transport to hospital.",
+      location: { type: "Point", coordinates: [85.8830, 20.4625], address: "Cuttack Bridge" },
+      requiredSkills: ["medical"],
+      estimatedTime: "1 hour",
+      rewardCredits: 30,
+    },
+    {
+      title: "Rescue — 3 people trapped in flooded building",
+      type: "rescue",
+      priority: "critical",
+      status: "open",
+      description: "3 survivors confirmed on 2nd floor of flooded building. Water level rising. Boat required.",
+      location: { type: "Point", coordinates: [85.8245, 20.2961], address: "Bhubaneswar Old Town" },
+      requiredSkills: ["rescue"],
+      estimatedTime: "3 hours",
+      rewardCredits: 50,
+    },
+    {
+      title: "Evacuation — elderly residents need transport",
+      type: "evacuation",
+      priority: "high",
+      status: "open",
+      description: "12 elderly residents unable to self-evacuate. Need vehicle and assistance to KIIT shelter.",
+      location: { type: "Point", coordinates: [85.8139, 20.3500], address: "Patia, Bhubaneswar" },
+      requiredSkills: ["transport"],
+      estimatedTime: "1.5 hours",
+      rewardCredits: 25,
+    },
+    {
+      title: "Search — missing child reported near shelter",
+      type: "search",
+      priority: "high",
+      status: "open",
+      description: "8-year-old child separated from family during evacuation. Last seen near Nayapalli shelter.",
+      location: { type: "Point", coordinates: [85.8067, 20.2847], address: "Nayapalli" },
+      requiredSkills: ["rescue", "translation"],
+      estimatedTime: "2 hours",
+      rewardCredits: 40,
+    },
   ]);
 
   // eslint-disable-next-line no-console

@@ -15,6 +15,8 @@ import Dashboard from "./pages/Dashboard";
 import SOSPage from "./pages/SOSPage";
 import FamilyReunite from "./pages/FamilyReunite";
 import VolunteerHub from "./pages/VolunteerHub";
+import VolunteerRegister from "./pages/VolunteerRegister";
+import VolunteerDashboard from "./pages/VolunteerDashboard";
 import ShelterFinder from "./pages/ShelterFinder";
 import AdminPortal from "./pages/AdminPortal";
 import ResourceTracker from "./pages/ResourceTracker";
@@ -61,7 +63,9 @@ export default function App() {
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/sos"       element={<SOSPage />} />
           <Route path="/family"    element={<FamilyReunite />} />
-          <Route path="/volunteer" element={<VolunteerHub />} />
+          <Route path="/volunteer"           element={<VolunteerHub />} />
+          <Route path="/volunteer-register"  element={<VolunteerRegister />} />
+          <Route path="/volunteer-dashboard" element={<VolunteerDashboard />} />
           <Route path="/shelter"   element={<ShelterFinder />} />
           <Route
             path="/admin"
