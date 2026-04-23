@@ -1,0 +1,318 @@
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Rajdhani:wght@500;600;700&family=Saira+Semi+Condensed:wght@500;700&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+  --bg-primary: #0b1219;
+  --bg-surface: #121a23;
+  --bg-card: #1c252f;
+  --bg-critical: #3a0a0a;
+  --accent-safe: #1f3b2d;
+  --accent-watch: #a56a00;
+  --accent-high: #c4451c;
+  --accent-critical: #8e1111;
+  --accent-panic: #ff3b30;
+  --accent-trace: #79d4ff;
+  --text-primary: #f3f7fb;
+  --text-secondary: #9ca9b7;
+  --border: rgba(193, 212, 231, 0.16);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  font-family: "Rajdhani", sans-serif;
+  color: var(--text-primary);
+  background:
+    radial-gradient(circle at 8% -10%, rgba(121, 212, 255, 0.18), transparent 35%),
+    radial-gradient(circle at 92% 4%, rgba(196, 69, 28, 0.22), transparent 28%),
+    linear-gradient(180deg, #0b1219 0%, #090f15 100%);
+  letter-spacing: 0.01em;
+}
+
+.glass {
+  background:
+    linear-gradient(130deg, rgba(20, 30, 40, 0.94), rgba(14, 22, 31, 0.94)),
+    repeating-linear-gradient(
+      0deg,
+      transparent 0,
+      transparent 19px,
+      rgba(121, 212, 255, 0.03) 20px
+    );
+  border: 1px solid var(--border);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.03), 0 14px 28px rgba(0, 0, 0, 0.32);
+}
+
+.map-shell .leaflet-container {
+  height: 100%;
+  width: 100%;
+  border-radius: 1rem;
+  background: #071017;
+}
+
+.radar-zone {
+  animation: radar-breathe 2.6s ease-in-out infinite;
+}
+
+.sos-pulse::after {
+  content: "";
+  position: absolute;
+  inset: -12px;
+  border: 2px solid rgba(255, 59, 48, 0.66);
+  border-radius: 9999px;
+  animation: pulse-ring 1.8s linear infinite;
+}
+
+.broadcast-banner {
+  border: 1px solid rgba(255, 59, 48, 0.5);
+  background:
+    linear-gradient(90deg, rgba(142, 17, 17, 0.75), rgba(69, 10, 10, 0.7)),
+    repeating-linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.04) 0,
+      rgba(255, 255, 255, 0.04) 3px,
+      transparent 3px,
+      transparent 9px
+    );
+  animation: ticker-glow 1.5s ease-in-out infinite alternate;
+}
+
+.broadcast-banner p {
+  font-family: "Saira Semi Condensed", sans-serif;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.panic-ui {
+  background:
+    radial-gradient(circle at 50% 10%, rgba(255, 59, 48, 0.18), transparent 45%),
+    linear-gradient(180deg, #1a0707 0%, #0b1219 100%);
+}
+
+.sim-control-shell {
+  background:
+    radial-gradient(circle at 10% 0, rgba(121, 212, 255, 0.16), transparent 35%),
+    radial-gradient(circle at 90% 0, rgba(255, 59, 48, 0.12), transparent 28%),
+    linear-gradient(180deg, #070d13 0%, #0b1219 100%);
+}
+
+.sim-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 16px;
+  background: linear-gradient(145deg, rgba(16, 26, 36, 0.95), rgba(9, 14, 21, 0.95));
+}
+
+.sim-header h1 {
+  margin: 0;
+  font-size: 1.7rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.sim-kicker {
+  margin: 0;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  color: #79d4ff;
+}
+
+.sim-subtitle {
+  margin: 4px 0 0;
+  color: var(--text-secondary);
+}
+
+.sim-clock {
+  min-width: 190px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 12px;
+  padding: 10px;
+  background: rgba(4, 10, 16, 0.8);
+}
+
+.sim-clock p,
+.sim-clock span {
+  margin: 0;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+}
+
+.sim-clock strong {
+  display: block;
+  margin: 4px 0;
+  color: #79d4ff;
+}
+
+.sim-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px;
+}
+
+.sim-block {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: linear-gradient(170deg, rgba(20, 30, 40, 0.95), rgba(10, 16, 23, 0.95));
+  padding: 14px;
+}
+
+.sim-block h2 {
+  margin: 0 0 10px;
+  font-size: 1.05rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.sim-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.sim-actions button,
+.sim-block > button,
+.sim-toggle button {
+  border: 1px solid rgba(121, 212, 255, 0.4);
+  border-radius: 10px;
+  background: rgba(9, 15, 22, 0.86);
+  color: var(--text-primary);
+  min-height: 42px;
+  font-family: "Rajdhani", sans-serif;
+  font-size: 0.98rem;
+  cursor: pointer;
+  transition: all 120ms ease;
+}
+
+.sim-actions button:hover,
+.sim-block > button:hover,
+.sim-toggle button:hover {
+  transform: translateY(-1px);
+  border-color: rgba(121, 212, 255, 0.8);
+}
+
+.sim-actions button.danger {
+  border-color: rgba(255, 59, 48, 0.7);
+  color: #ffd2cf;
+}
+
+.sim-block label {
+  display: block;
+  margin: 10px 0 4px;
+  color: var(--text-secondary);
+}
+
+.sim-block input[type="range"] {
+  width: 100%;
+}
+
+.sim-toggle {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sim-toggle button.on {
+  border-color: rgba(77, 218, 152, 0.8);
+  color: #4dda98;
+}
+
+.sim-toggle button.off {
+  border-color: rgba(255, 178, 34, 0.8);
+  color: #ffb222;
+}
+
+.sim-block > button.full {
+  margin-top: 10px;
+  width: 100%;
+}
+
+.telemetry {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 7px;
+}
+
+.telemetry li {
+  display: flex;
+  justify-content: space-between;
+  border-bottom: 1px dashed rgba(255, 255, 255, 0.12);
+  padding-bottom: 6px;
+  color: var(--text-secondary);
+}
+
+.telemetry strong {
+  color: var(--text-primary);
+}
+
+.sim-code {
+  display: block;
+  white-space: pre-line;
+  border: 1px solid rgba(121, 212, 255, 0.18);
+  border-radius: 8px;
+  padding: 8px;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: #a9daff;
+  background: rgba(7, 12, 18, 0.9);
+}
+
+@keyframes pulse-ring {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.45);
+    opacity: 0;
+  }
+}
+
+@keyframes radar-breathe {
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 0.56;
+  }
+}
+
+@keyframes ticker-glow {
+  from {
+    box-shadow: 0 0 0 rgba(255, 59, 48, 0);
+  }
+  to {
+    box-shadow: 0 0 18px rgba(255, 59, 48, 0.35);
+  }
+}
+
+@media (max-width: 900px) {
+  .sim-header {
+    flex-direction: column;
+  }
+
+  .sim-actions {
+    grid-template-columns: 1fr;
+  }
+}
