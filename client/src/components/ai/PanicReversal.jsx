@@ -1,41 +1,40 @@
 import { useEffect } from "react";
 import { motion } from "framer-motion";
-import * as Tone from "tone";
 
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+// Speak breathing instructions using Web Speech API — no Tone.js
+function speakCalm(text) {
+  if (!window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang   = "hi-IN";
+  u.rate   = 0.7;
+  u.pitch  = 0.9;
+  u.volume = 1;
+  window.speechSynthesis.speak(u);
+}
 
 export default function PanicReversal({ isActive, onDismiss }) {
   useEffect(() => {
-    if (!isActive) return;
-    let cancelled = false;
+    if (!isActive) return undefined;
 
-    const runProtocol = async () => {
-      await Tone.start();
-      const synth = new Tone.Synth({ oscillator: { type: "sine" } }).toDestination();
-      document.body.style.transition = "opacity 300ms ease";
-      document.body.style.opacity = "0.3";
-      navigator.vibrate?.([500, 500, 500, 500, 500]);
+    // Speak the breathing prompt immediately
+    speakCalm("घबराएं नहीं। आप सुरक्षित हैं। सांस लें। चार तक गिनें। रोकें। आठ तक गिनें।");
 
-      for (let i = 0; i < 3 && !cancelled; i += 1) {
-        synth.triggerAttackRelease(396, 4);
-        await sleep(4000);
-        if (cancelled) break;
-        await sleep(7000);
-        if (cancelled) break;
-        synth.triggerAttackRelease(285, 8);
-        await sleep(8000);
-      }
-      synth.dispose();
-    };
+    // Repeat breathing cue every 19 seconds (4+7+8 cycle)
+    const interval = setInterval(() => {
+      speakCalm("सांस लें। चार। रोकें। सात। छोड़ें। आठ।");
+    }, 19000);
 
-    runProtocol();
-    const timeout = setTimeout(() => {
-      onDismiss?.();
-    }, 60000);
+    // Vibrate calm pattern
+    navigator.vibrate?.([500, 500, 500, 500, 500]);
+
+    // Auto-dismiss after 60 seconds
+    const timeout = setTimeout(() => onDismiss?.(), 60000);
 
     return () => {
-      cancelled = true;
+      clearInterval(interval);
       clearTimeout(timeout);
+      window.speechSynthesis?.cancel();
       document.body.style.opacity = "1";
     };
   }, [isActive, onDismiss]);
@@ -51,12 +50,16 @@ export default function PanicReversal({ isActive, onDismiss }) {
     >
       <div className="glass max-w-2xl rounded-2xl border border-live/40 p-8 text-center">
         <p className="font-heading text-4xl text-live">You are safe. Help is coming.</p>
-        <p className="mt-4 text-xl text-text">Breathe in 4 sec. Hold 7 sec. Breathe out 8 sec.</p>
+        <p className="mt-4 text-xl text-text">Breathe in 4 sec · Hold 7 sec · Breathe out 8 sec</p>
+
+        {/* Breathing circle — the only animation */}
         <motion.div
           className="mx-auto mt-8 h-36 w-36 rounded-full border-2 border-live"
-          animate={{ scale: [1, 1.2, 1], opacity: [0.8, 1, 0.8] }}
-          transition={{ duration: 6, repeat: Infinity }}
+          animate={{ scale: [1, 1.25, 1], opacity: [0.6, 1, 0.6] }}
+          transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
         />
+
+        <p className="mt-6 text-sm text-muted">Tap anywhere to dismiss</p>
       </div>
     </motion.div>
   );

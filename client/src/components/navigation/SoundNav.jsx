@@ -1,169 +1,424 @@
 /* eslint-disable react/prop-types */
-import { useEffect, useRef, useState, useMemo, useCallback } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import PanicReversal from "../ai/PanicReversal";
 
-function toRadians(v) { return (v * Math.PI) / 180; }
+// ── Geo helpers ───────────────────────────────────────────────────────────────
+function toRad(v) { return (v * Math.PI) / 180; }
 
-function bearingBetween([lat1, lng1], [lat2, lng2]) {
-  const y = Math.sin(toRadians(lng2 - lng1)) * Math.cos(toRadians(lat2));
-  const x =
-    Math.cos(toRadians(lat1)) * Math.sin(toRadians(lat2)) -
-    Math.sin(toRadians(lat1)) * Math.cos(toRadians(lat2)) * Math.cos(toRadians(lng2 - lng1));
+function getDistance(lat1, lng1, lat2, lng2) {
+  const R = 6371e3;
+  const p1 = toRad(lat1), p2 = toRad(lat2);
+  const dLat = toRad(lat2 - lat1), dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(p1) * Math.cos(p2) * Math.sin(dLng / 2) ** 2;
+  return Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+}
+
+function getBearing(lat1, lng1, lat2, lng2) {
+  const y = Math.sin(toRad(lng2 - lng1)) * Math.cos(toRad(lat2));
+  const x = Math.cos(toRad(lat1)) * Math.sin(toRad(lat2)) -
+            Math.sin(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.cos(toRad(lng2 - lng1));
   return (Math.atan2(y, x) * 180) / Math.PI;
 }
 
-function distanceMeters([lat1, lng1], [lat2, lng2]) {
-  const R = 6371e3;
-  const p1 = toRadians(lat1), p2 = toRadians(lat2);
-  const dLat = toRadians(lat2 - lat1), dLng = toRadians(lng2 - lng1);
-  const a = Math.sin(dLat / 2) ** 2 + Math.cos(p1) * Math.cos(p2) * Math.sin(dLng / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+function getCardinalDirection(bearing) {
+  const b = ((bearing % 360) + 360) % 360;
+  if (b < 30 || b >= 330) return "N";
+  if (b < 60)  return "NE";
+  if (b < 120) return "E";
+  if (b < 150) return "SE";
+  if (b < 210) return "S";
+  if (b < 240) return "SW";
+  if (b < 300) return "W";
+  return "NW";
 }
 
-// Create a clean sine beep — called only after user gesture (audioReady = true)
-async function playBeep(freqHz, durationSec = 0.1, pan = 0) {
-  try {
-    const Tone = await import("tone");
-    await Tone.start();
-    const panner = new Tone.Panner(pan).toDestination();
-    const synth  = new Tone.Synth({
-      oscillator: { type: "sine" },
-      envelope:   { attack: 0.01, decay: 0.08, sustain: 0, release: 0.08 },
-    }).connect(panner);
-    synth.triggerAttackRelease(freqHz, durationSec);
-    // Dispose after sound finishes to avoid memory leak
-    setTimeout(() => { synth.dispose(); panner.dispose(); }, 1500);
-  } catch {
-    // Audio blocked or unavailable — silent fail
-  }
+function formatDistance(m) {
+  return m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${m} metres`;
 }
 
-async function playForward()  { await playBeep(880, 0.08, 0); await new Promise(r => setTimeout(r, 200)); await playBeep(880, 0.08, 0); }
-async function playLeft()     { await playBeep(660, 0.12, -1); }
-async function playRight()    { await playBeep(660, 0.12,  1); }
-async function playArrived()  { await playBeep(1046, 0.5, 0); }
-async function playObstacle() { await playBeep(220, 0.2, 0); }
+// ── Web Speech API — NO Tone.js ───────────────────────────────────────────────
+function speak(text, lang = "hi-IN") {
+  if (!window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang   = lang;
+  u.rate   = 0.85;
+  u.pitch  = 1;
+  u.volume = 1;
+  window.speechSynthesis.speak(u);
+}
 
+// ── Language config ───────────────────────────────────────────────────────────
+const LANGUAGES = {
+  "hi-IN": {
+    label: "हिंदी",
+    messages: {
+      started:    (name) => `नेविगेशन शुरू। लक्ष्य: ${name}`,
+      forward:    "सीधे आगे बढ़ें",
+      left:       "बाईं ओर मुड़ें",
+      right:      "दाईं ओर मुड़ें",
+      turnAround: "पीछे मुड़ें",
+      arrived:    "आप पहुंच गए। आश्रय मिल गया।",
+      calm:       "घबराएं नहीं। मदद आ रही है।",
+      great:      "बहुत अच्छे! चलते रहें।",
+    },
+  },
+  "en-IN": {
+    label: "English",
+    messages: {
+      started:    (name) => `Navigation started. Target: ${name}`,
+      forward:    "Continue straight ahead",
+      left:       "Turn left",
+      right:      "Turn right",
+      turnAround: "Turn around",
+      arrived:    "You have arrived at the shelter.",
+      calm:       "Don't panic. Help is coming.",
+      great:      "Great! Keep moving.",
+    },
+  },
+  "or-IN": {
+    label: "ଓଡ଼ିଆ",
+    messages: {
+      started:    (name) => `ନେଭିଗେସନ ଆରମ୍ଭ। ଲକ୍ଷ୍ୟ: ${name}`,
+      forward:    "ସିଧା ଆଗକୁ ଯାଆନ୍ତୁ",
+      left:       "ବାମ ଦିଗକୁ ମୋଡ଼ନ୍ତୁ",
+      right:      "ଡାହାଣ ଦିଗକୁ ମୋଡ଼ନ୍ତୁ",
+      turnAround: "ପଛକୁ ଫେରନ୍ତୁ",
+      arrived:    "ଆପଣ ପହଞ୍ଚି ଗଲେ।",
+      calm:       "ଭୟ କରନ୍ତୁ ନାହିଁ। ସାହାଯ୍ୟ ଆସୁଛି।",
+      great:      "ବହୁତ ଭଲ! ଚାଲୁ ରୁହନ୍ତୁ।",
+    },
+  },
+};
+
+// ── Panic check questions ─────────────────────────────────────────────────────
+const PANIC_CHECK_QUESTIONS = [
+  {
+    question: "क्या आप ठीक हैं? (Are you okay?)",
+    options: [
+      { text: "हां, ठीक हूं (Yes, I am fine)",       panic: false },
+      { text: "थोड़ा डरा हुआ हूं (Feeling scared)",   panic: true  },
+      { text: "बहुत डर लग रहा है (Very scared)",      panic: true  },
+    ],
+  },
+  {
+    question: "क्या आप चल सकते हैं? (Can you walk?)",
+    options: [
+      { text: "हां, चल सकता हूं (Yes)",    panic: false },
+      { text: "मुश्किल है (Difficult)",     panic: true  },
+      { text: "नहीं (No)",                  panic: true  },
+    ],
+  },
+  {
+    question: "क्या आप अकेले हैं? (Are you alone?)",
+    options: [
+      { text: "नहीं, साथ में हैं (No, with others)", panic: false },
+      { text: "हां, अकेला हूं (Yes, alone)",          panic: true  },
+      { text: "बच्चे साथ हैं (With children)",        panic: true  },
+    ],
+  },
+];
+
+// ── Arrow rotation by cardinal direction ──────────────────────────────────────
+const DIR_ROTATION = { N: 0, NE: 45, E: 90, SE: 135, S: 180, SW: 225, W: 270, NW: 315 };
+
+// ── Component ─────────────────────────────────────────────────────────────────
 export default function SoundNav({
-  target     = [20.305, 85.835],
   targetLat,
   targetLng,
+  target     = [20.305, 85.835],
   targetName = "Shelter",
   onArrived,
+  socket,
+  user,
 }) {
-  const [audioReady, setAudioReady] = useState(false);
-  const [direction,  setDirection]  = useState("FORWARD");
-  const [distance,   setDistance]   = useState(null);
-  const timerRef   = useRef(null);
-  const cancelRef  = useRef(false);
+  const resolvedLat = typeof targetLat === "number" ? targetLat : target[0];
+  const resolvedLng = typeof targetLng === "number" ? targetLng : target[1];
 
-  const resolvedTarget = useMemo(() => {
-    if (typeof targetLat === "number" && typeof targetLng === "number") return [targetLat, targetLng];
-    return target;
-  }, [target, targetLat, targetLng]);
+  const [audioStarted,    setAudioStarted]    = useState(false);
+  const [selectedLang,    setSelectedLang]    = useState("hi-IN");
+  const [direction,       setDirection]       = useState("N");
+  const [distance,        setDistance]        = useState(null);
+  const [isSpeaking,      setIsSpeaking]      = useState(false);
+  const [showPanicCheck,  setShowPanicCheck]  = useState(false);
+  const [panicDetected,   setPanicDetected]   = useState(false);
+  const [checkStep,       setCheckStep]       = useState(0);
+  const [currentPos,      setCurrentPos]      = useState({ lat: 20.2961, lng: 85.8245 });
 
-  const arrowRotation = direction === "LEFT" ? -90 : direction === "RIGHT" ? 90 : 0;
+  const navIntervalRef   = useRef(null);
+  const panicIntervalRef = useRef(null);
+  const cancelRef        = useRef(false);
 
-  const initAudio = useCallback(async () => {
-    try {
-      const Tone = await import("tone");
-      await Tone.start();
-      setAudioReady(true);
-    } catch {
-      setAudioReady(true); // proceed even if Tone fails
-    }
-  }, []);
+  const sayIt = useCallback((text) => {
+    setIsSpeaking(true);
+    speak(text, selectedLang);
+    setTimeout(() => setIsSpeaking(false), 3000);
+  }, [selectedLang]);
 
+  // ── Start navigation ────────────────────────────────────────────────────────
+  const startNavigation = useCallback(() => {
+    setAudioStarted(true);
+    const msgs = LANGUAGES[selectedLang].messages;
+    sayIt(msgs.started(targetName));
+  }, [selectedLang, targetName, sayIt]);
+
+  // ── Navigation tick ─────────────────────────────────────────────────────────
   const tick = useCallback(() => {
-    if (!navigator.geolocation) return;
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        if (cancelRef.current) return;
-        const current = [pos.coords.latitude, pos.coords.longitude];
-        const dist    = distanceMeters(current, resolvedTarget);
-        setDistance(Math.round(dist));
+    if (cancelRef.current) return;
+    const msgs = LANGUAGES[selectedLang].messages;
 
-        if (dist <= 30) {
-          setDirection("ARRIVED");
-          await playArrived();
+    navigator.geolocation?.getCurrentPosition(
+      (pos) => {
+        if (cancelRef.current) return;
+        const lat  = pos.coords.latitude;
+        const lng  = pos.coords.longitude;
+        setCurrentPos({ lat, lng });
+
+        const dist = getDistance(lat, lng, resolvedLat, resolvedLng);
+        const bear = getBearing(lat, lng, resolvedLat, resolvedLng);
+        const dir  = getCardinalDirection(bear);
+
+        setDistance(dist);
+        setDirection(dir);
+
+        if (dist < 30) {
+          sayIt(msgs.arrived);
           navigator.vibrate?.([200, 100, 200, 100, 200]);
+          cancelRef.current = true;
+          clearInterval(navIntervalRef.current);
           onArrived?.();
           return;
         }
 
-        const bearing = bearingBetween(current, resolvedTarget);
-        if (bearing < -30) {
-          setDirection("LEFT");
-          await playLeft();
+        const isForward = ["N", "NE", "NW"].includes(dir);
+        const isLeft    = ["W", "SW"].includes(dir);
+        const isRight   = ["E", "SE"].includes(dir);
+
+        if (isForward) {
+          sayIt(`${msgs.forward}. ${formatDistance(dist)} remaining.`);
           navigator.vibrate?.([200, 100, 200]);
-        } else if (bearing > 30) {
-          setDirection("RIGHT");
-          await playRight();
+        } else if (isLeft) {
+          sayIt(msgs.left);
+          navigator.vibrate?.([200, 100, 200, 100, 200]);
+        } else if (isRight) {
+          sayIt(msgs.right);
           navigator.vibrate?.([500]);
         } else {
-          setDirection("FORWARD");
-          await playForward();
-          navigator.vibrate?.([200]);
+          sayIt(msgs.turnAround);
+          navigator.vibrate?.([1000]);
         }
       },
-      () => playObstacle(), // GPS error — obstacle beep
+      () => sayIt("Continuing navigation. Follow the arrow."),
       { timeout: 5000, maximumAge: 10000 }
     );
-  }, [resolvedTarget, onArrived]);
+  }, [selectedLang, resolvedLat, resolvedLng, sayIt, onArrived]);
 
-  // Start ticking only after audio is enabled
+  // ── Start intervals after audio enabled ────────────────────────────────────
   useEffect(() => {
-    if (!audioReady) return undefined;
+    if (!audioStarted) return undefined;
     cancelRef.current = false;
+
     tick();
-    timerRef.current = setInterval(tick, 5000);
+    navIntervalRef.current = setInterval(tick, 5000);
+
+    // Panic check every 60 seconds
+    panicIntervalRef.current = setInterval(() => {
+      if (cancelRef.current) return;
+      const q = PANIC_CHECK_QUESTIONS[checkStep % PANIC_CHECK_QUESTIONS.length];
+      setShowPanicCheck(true);
+      speak(q.question, selectedLang);
+    }, 60000);
+
     return () => {
       cancelRef.current = true;
-      clearInterval(timerRef.current);
+      clearInterval(navIntervalRef.current);
+      clearInterval(panicIntervalRef.current);
+      window.speechSynthesis?.cancel();
     };
-  }, [audioReady, tick]);
+  }, [audioStarted]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (!audioReady) {
+  // ── Handle panic answer ─────────────────────────────────────────────────────
+  const handlePanicAnswer = useCallback((option) => {
+    setShowPanicCheck(false);
+    setCheckStep((prev) => prev + 1);
+    const msgs = LANGUAGES[selectedLang].messages;
+
+    if (option.panic) {
+      setPanicDetected(true);
+      sayIt(msgs.calm);
+      navigator.vibrate?.([500, 200, 500]);
+      socket?.emit("sos:silent", {
+        userId: user?._id || user?.id || "demo-user",
+        lat: currentPos.lat,
+        lng: currentPos.lng,
+        type: "panic-detected-during-navigation",
+        timestamp: new Date().toISOString(),
+      });
+    } else {
+      sayIt(msgs.great);
+    }
+  }, [selectedLang, sayIt, socket, user, currentPos]);
+
+  const handleEmergencySOS = useCallback(() => {
+    const msgs = LANGUAGES[selectedLang].messages;
+    sayIt(msgs.calm);
+    socket?.emit("sos:silent", {
+      userId: user?._id || user?.id || "demo-user",
+      lat: currentPos.lat,
+      lng: currentPos.lng,
+      type: "emergency-button-navigation",
+      timestamp: new Date().toISOString(),
+    });
+    setPanicDetected(true);
+  }, [selectedLang, sayIt, socket, user, currentPos]);
+
+  const arrowRotation = DIR_ROTATION[direction] ?? 0;
+  const currentQ      = PANIC_CHECK_QUESTIONS[checkStep % PANIC_CHECK_QUESTIONS.length];
+
+  // ── Pre-start screen ────────────────────────────────────────────────────────
+  if (!audioStarted) {
     return (
-      <div className="flex flex-col items-center gap-4 py-8 text-center">
-        <p className="text-sm text-muted">Audio navigation uses directional beeps to guide you.</p>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "16px", padding: "32px 16px", textAlign: "center" }}>
+        <p style={{ color: "#9CA3AF", fontSize: "14px" }}>
+          Voice navigation guides you to <strong style={{ color: "#F3F7FB" }}>{targetName}</strong> in your language.
+        </p>
+
+        {/* Language selector */}
+        <div style={{ display: "flex", gap: "8px" }}>
+          {Object.entries(LANGUAGES).map(([code, cfg]) => (
+            <button
+              key={code}
+              onClick={() => setSelectedLang(code)}
+              style={{
+                padding: "8px 16px", borderRadius: "8px", fontSize: "14px", cursor: "pointer",
+                background: selectedLang === code ? "#10B981" : "transparent",
+                border: `1px solid ${selectedLang === code ? "#10B981" : "rgba(255,255,255,0.2)"}`,
+                color: selectedLang === code ? "#fff" : "#9CA3AF",
+              }}
+            >
+              {cfg.label}
+            </button>
+          ))}
+        </div>
+
         <button
-          onClick={initAudio}
-          className="rounded-xl bg-green-600 px-8 py-4 text-lg font-bold text-white hover:bg-green-500"
+          onClick={startNavigation}
+          style={{ padding: "18px 40px", borderRadius: "14px", background: "#10B981", color: "#fff", border: "none", fontSize: "18px", fontWeight: "bold", cursor: "pointer" }}
         >
-          Tap to Enable Audio Navigation
+          Tap to Enable Voice Navigation
         </button>
-        <p className="text-xs text-muted">Required by browser — audio must start from a tap</p>
+        <p style={{ color: "#6B7280", fontSize: "12px" }}>Browser requires a tap before speaking</p>
       </div>
     );
   }
 
+  // ── Active navigation screen ────────────────────────────────────────────────
   return (
-    <div className="flex flex-col items-center gap-4 py-4 text-center">
-      <p className="text-sm text-muted">Navigating to <span className="text-text font-semibold">{targetName}</span></p>
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "12px", padding: "16px", textAlign: "center", position: "relative" }}>
+
+      {/* Target name */}
+      <p style={{ color: "#9CA3AF", fontSize: "13px" }}>
+        Navigating to <strong style={{ color: "#F3F7FB" }}>{targetName}</strong>
+      </p>
+
+      {/* Language selector */}
+      <div style={{ display: "flex", gap: "6px" }}>
+        {Object.entries(LANGUAGES).map(([code, cfg]) => (
+          <button
+            key={code}
+            onClick={() => setSelectedLang(code)}
+            style={{
+              padding: "4px 10px", borderRadius: "6px", fontSize: "12px", cursor: "pointer",
+              background: selectedLang === code ? "#10B981" : "transparent",
+              border: `1px solid ${selectedLang === code ? "#10B981" : "rgba(255,255,255,0.15)"}`,
+              color: selectedLang === code ? "#fff" : "#6B7280",
+            }}
+          >
+            {cfg.label}
+          </button>
+        ))}
+      </div>
 
       {/* Direction arrow */}
       <svg
-        width="120" height="120" viewBox="0 0 100 100"
-        style={{ transform: `rotate(${arrowRotation}deg)`, transition: "transform 0.4s ease" }}
+        width="140" height="140" viewBox="0 0 100 100"
+        style={{ transform: `rotate(${arrowRotation}deg)`, transition: "transform 0.5s ease" }}
       >
-        <polygon points="50,5 95,95 50,75 5,95" fill={direction === "ARRIVED" ? "#10B981" : "#79D4FF"} />
+        <polygon
+          points="50,5 95,95 50,75 5,95"
+          fill={direction === "ARRIVED" ? "#10B981" : "#79D4FF"}
+        />
       </svg>
 
-      <p className="font-heading text-3xl tracking-wide">
+      {/* Direction label */}
+      <p style={{ fontSize: "28px", fontWeight: "bold", color: "#F3F7FB", margin: 0 }}>
         {direction === "ARRIVED" ? "✓ ARRIVED" : direction}
       </p>
 
+      {/* Distance */}
       {distance !== null && (
-        <p className="text-muted">
-          Distance: <span className="font-mono text-text">{distance}m</span>
+        <p style={{ fontSize: "20px", color: "#9CA3AF", margin: 0 }}>
+          <span style={{ color: "#F3F7FB", fontFamily: "monospace" }}>{formatDistance(distance)}</span> to shelter
         </p>
       )}
 
-      <div className="mt-2 flex gap-4 text-xs text-muted">
-        <span>🔊 Left = turn left</span>
-        <span>🔊 Right = turn right</span>
-        <span>🔊 Double = forward</span>
-      </div>
+      {/* Speaking indicator */}
+      <p style={{ fontSize: "12px", color: isSpeaking ? "#10B981" : "#4B5563", margin: 0 }}>
+        {isSpeaking ? "🔊 Speaking…" : "🔇 Listening for GPS…"}
+      </p>
+
+      {/* Panic reversal overlay */}
+      {panicDetected && (
+        <PanicReversal
+          isActive
+          onDismiss={() => {
+            setPanicDetected(false);
+            sayIt(LANGUAGES[selectedLang].messages.great);
+          }}
+        />
+      )}
+
+      {/* Panic check bottom sheet */}
+      {showPanicCheck && !panicDetected && (
+        <div style={{
+          position: "fixed", bottom: 0, left: 0, right: 0,
+          background: "#111827", border: "1px solid rgba(255,255,255,0.1)",
+          borderRadius: "20px 20px 0 0", padding: "24px", zIndex: 9999,
+        }}>
+          <p style={{ color: "#F9FAFB", fontSize: "18px", marginBottom: "16px", textAlign: "center" }}>
+            {currentQ.question}
+          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+            {currentQ.options.map((opt, i) => (
+              <button
+                key={i}
+                onClick={() => handlePanicAnswer(opt)}
+                style={{
+                  padding: "16px", borderRadius: "12px", cursor: "pointer", textAlign: "left",
+                  border: "1px solid rgba(255,255,255,0.2)", fontSize: "15px", color: "white",
+                  background: opt.panic ? "rgba(239,68,68,0.15)" : "rgba(16,185,129,0.15)",
+                }}
+              >
+                {opt.text}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Fixed emergency SOS button */}
+      <button
+        onClick={handleEmergencySOS}
+        style={{
+          position: "fixed", bottom: "24px", right: "24px",
+          width: "70px", height: "70px", borderRadius: "50%",
+          background: "#EF4444", color: "white", border: "none",
+          fontSize: "12px", fontWeight: "bold", cursor: "pointer", zIndex: 9998,
+          boxShadow: "0 0 0 4px rgba(239,68,68,0.3)",
+        }}
+      >
+        SOS
+      </button>
     </div>
   );
 }

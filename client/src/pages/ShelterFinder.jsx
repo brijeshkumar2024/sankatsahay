@@ -2,6 +2,8 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import Card from "../components/ui/Card";
 import SoundNav from "../components/navigation/SoundNav";
+import useSocket from "../hooks/useSocket";
+import useAppStore from "../store/useAppStore";
 
 const DEMO_SHELTERS = [
   {
@@ -78,9 +80,13 @@ function statusStyle(status) {
 }
 
 export default function ShelterFinder() {
-  const [shelters]         = useState(DEMO_SHELTERS);
-  const [selectedShelter,  setSelectedShelter]  = useState(null);
-  const [navActive,        setNavActive]         = useState(false);
+  const token  = useAppStore((s) => s.token) || localStorage.getItem("sankat-token");
+  const user   = useAppStore((s) => s.user) || { id: "demo-user" };
+  const socket = useSocket(token);
+
+  const [shelters]        = useState(DEMO_SHELTERS);
+  const [selectedShelter, setSelectedShelter] = useState(null);
+  const [navActive,       setNavActive]        = useState(false);
 
   return (
     <motion.main
@@ -99,6 +105,8 @@ export default function ShelterFinder() {
             targetLng={selectedShelter.coordinates[1]}
             targetName={selectedShelter.name}
             onArrived={() => setNavActive(false)}
+            socket={socket}
+            user={user}
           />
           <button
             onClick={() => setNavActive(false)}
