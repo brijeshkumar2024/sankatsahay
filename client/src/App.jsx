@@ -1,9 +1,10 @@
-import { Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { AnimatePresence } from "framer-motion";
 import Navbar from "./components/shared/Navbar";
 import DemoBanner from "./components/shared/DemoBanner";
 import DemoStepIndicator from "./components/shared/DemoStepIndicator";
 import AdminRoute from "./components/shared/AdminRoute";
+import VoiceAI from "./components/ai/VoiceAI";
 import useOffline from "./hooks/useOffline";
 import useSocket from "./hooks/useSocket";
 import useAppStore from "./store/useAppStore";
@@ -27,9 +28,9 @@ import SimulationControlPanel from "./pages/SimulationControlPanel";
 export default function App() {
   const offline  = useOffline();
   const location = useLocation();
+  const navigate = useNavigate();
   const isSimControl = location.pathname === "/sim-control";
 
-  // Keep demo flow in sync with sim-control socket events
   const token  = useAppStore((s) => s.token) || localStorage.getItem("sankat-token");
   const socket = useSocket(token);
   useDemoFlowSync(socket);
@@ -87,6 +88,14 @@ export default function App() {
         <footer className="mx-auto mt-8 max-w-7xl border-t border-border px-4 py-4 text-xs text-muted">
           Face data processed locally · No biometric storage · GDPR deletion supported
         </footer>
+      )}
+
+      {/* VoiceAI — global floating button on every page */}
+      {!isSimControl && (
+        <VoiceAI
+          onSOSTrigger={() => navigate("/sos")}
+          onPanicDetected={() => {}}
+        />
       )}
     </div>
   );

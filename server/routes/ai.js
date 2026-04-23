@@ -50,4 +50,37 @@ router.post("/volunteer-guidance/stream", requireAuth, async (req, res) => {
   await streamVolunteerGuidance(req.body.taskData || {}, res);
 });
 
+// Voice chat — no auth required so VoiceAI works without login
+router.post("/voice-chat", async (req, res) => {
+  try {
+    const { messages = [], language = "hi-IN" } = req.body;
+    if (!messages.length) return res.status(400).json({ error: "messages required" });
+
+    const { default: OpenAI } = await import("openai");
+    const client = new OpenAI({
+      baseURL: process.env.NVIDIA_BASE_URL || "https://integrate.api.nvidia.com/v1",
+      apiKey:  process.env.NVIDIA_API_KEY,
+    });
+
+    const completion = await client.chat.completions.create({
+      model:       process.env.NVIDIA_MODEL || "meta/llama-3.1-8b-instruct",
+      messages,
+      max_tokens:  120,
+      temperature: 0.7,
+    });
+
+    const response = completion.choices[0]?.message?.content ||
+      (language.startsWith("hi") ? "मदद आ रही है। शांत रहें।" : "Help is coming. Stay calm.");
+
+    return res.json({ response });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error("voice-chat error:", err.message);
+    return res.status(500).json({
+      response: "Abhi connect nahi ho pa raha. SOS button dabayein.",
+      error: err.message,
+    });
+  }
+});
+
 export default router;
