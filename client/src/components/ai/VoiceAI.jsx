@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 
 const SYSTEM_PROMPT = `You are SankatBot, an emergency response AI assistant for disaster situations in India.
 Rules:
@@ -19,8 +19,30 @@ const LANGUAGES = {
 };
 
 const EMERGENCY_WORDS = [
-  "bachao", "help", "emergency", "rescue", "trapped",
-  "bachao mujhe", "help me", "बचाओ", "मदद", "खतरा", "फंसा",
+  "bachao", "बचाओ", "bachao mujhe", "मुझे बचाओ",
+  "madad", "मदद", "madad karo", "मदद करो",
+  "help", "help me", "please help",
+  "emergency", "rescue",
+  "dub", "डूब", "doob", "pani mein", "पानी में",
+  "trapped", "फंसा", "fansi", "fansa",
+  "hurt", "injured", "chot", "चोट",
+  "aag", "आग", "fire",
+  "accident", "दुर्घटना",
+  "hospital", "ambulance",
+  "mar raha", "मर रहा", "death",
+  "khatra", "खतरा", "danger",
+  "gir gaya", "गिर गया", "fell",
+  "breathe nahi", "saans nahi", "सांस नहीं",
+  "sahayya kara", "ରକ୍ଷା କର",
+  "সাহায্য করো", "help koro",
+];
+
+const PANIC_WORDS = [
+  "dar", "डर", "dara", "scared", "afraid",
+  "ghabra", "घबरा", "panic", "nervous",
+  "rona", "रोना", "cry", "crying",
+  "akela", "अकेला", "alone",
+  "please", "koi nahi", "कोई नहीं",
 ];
 
 const GREETINGS = {
@@ -30,48 +52,23 @@ const GREETINGS = {
   "bn-IN": "নমস্কার, আমি SankatBot। আমি আপনাকে সাহায্য করতে এখানে আছি।",
 };
 
-const THINKING_LABEL = {
-  "hi-IN": "SankatBot सोच रहा है…",
-  "en-IN": "SankatBot is thinking…",
-  "or-IN": "SankatBot ଭାବୁଛି…",
-  "bn-IN": "SankatBot ভাবছে…",
-};
-
-const LISTENING_LABEL = {
-  "hi-IN": "सुन रहा है… बोलिए",
-  "en-IN": "Listening… speak now",
-  "or-IN": "ଶୁଣୁଛି… ବୋଲନ୍ତୁ",
-  "bn-IN": "শুনছি… বলুন",
-};
-
-const SPEAKING_LABEL = {
-  "hi-IN": "SankatBot बोल रहा है…",
-  "en-IN": "SankatBot is speaking…",
-  "or-IN": "SankatBot କହୁଛି…",
-  "bn-IN": "SankatBot বলছে…",
-};
+const THINKING_LABEL  = { "hi-IN": "SankatBot सोच रहा है…", "en-IN": "SankatBot is thinking…", "or-IN": "SankatBot ଭାବୁଛି…", "bn-IN": "SankatBot ভাবছে…" };
+const LISTENING_LABEL = { "hi-IN": "सुन रहा है… बोलिए",     "en-IN": "Listening… speak now",   "or-IN": "ଶୁଣୁଛି… ବୋଲନ୍ତୁ",   "bn-IN": "শুনছি… বলুন" };
+const SPEAKING_LABEL  = { "hi-IN": "SankatBot बोल रहा है…", "en-IN": "SankatBot is speaking…", "or-IN": "SankatBot କହୁଛି…", "bn-IN": "SankatBot বলছে…" };
 
 function speak(text, lang, onEnd) {
   if (!window.speechSynthesis) { onEnd?.(); return; }
   window.speechSynthesis.cancel();
   const u = new SpeechSynthesisUtterance(text);
-  u.lang   = lang;
-  u.rate   = 0.88;
-  u.pitch  = 1.1;
-  u.volume = 1;
+  u.lang = lang; u.rate = 0.88; u.pitch = 1.1; u.volume = 1;
   const voices = window.speechSynthesis.getVoices();
   const langCode = lang.split("-")[0];
-  const preferred = voices.find(
-    (v) => v.lang.startsWith(langCode) &&
-      (v.name.includes("Female") || v.name.includes("female") ||
-       v.name.includes("Heera") || v.name.includes("Priya"))
-  ) || voices.find((v) => v.lang.startsWith(langCode));
+  const preferred = voices.find((v) => v.lang.startsWith(langCode) && (v.name.includes("Female") || v.name.includes("female") || v.name.includes("Heera") || v.name.includes("Priya"))) || voices.find((v) => v.lang.startsWith(langCode));
   if (preferred) u.voice = preferred;
   if (onEnd) u.onend = onEnd;
   window.speechSynthesis.speak(u);
 }
 
-// ── Component ─────────────────────────────────────────────────────────────────
 export default function VoiceAI({ onSOSTrigger, onPanicDetected }) {
   const [isOpen,       setIsOpen]       = useState(false);
   const [isListening,  setIsListening]  = useState(false);
@@ -87,62 +84,94 @@ export default function VoiceAI({ onSOSTrigger, onPanicDetected }) {
   const conversationRef = useRef([]);
   const callActiveRef   = useRef(false);
 
-  // ── Start listening ─────────────────────────────────────────────────────────
-  const startListening = useCallback((lang) => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) { alert("Voice not supported. Use Chrome."); return; }
+  useEffect(() => { callActiveRef.current = callActive; }, [callActive]);
 
-    const recognition = new SpeechRecognition();
-    recognition.lang            = lang;
-    recognition.continuous      = false;
-    recognition.interimResults  = true;
+  const startListening = useCallback(() => {
+    if (!("webkitSpeechRecognition" in window) && !("SpeechRecognition" in window)) return;
+    try { recognitionRef.current?.stop(); } catch (e) {}
+
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const recognition = new SR();
+    recognition.lang = selectedLang;
+    recognition.continuous = true;
+    recognition.interimResults = true;
     recognition.maxAlternatives = 1;
 
-    recognition.onstart = () => setIsListening(true);
+    let finalTranscriptTimeout = null;
+
+    recognition.onstart = () => { setIsListening(true); console.log("Mic ON, lang:", selectedLang); };
 
     recognition.onresult = (event) => {
-      const result = event.results[event.results.length - 1];
-      const text   = result[0].transcript;
-      setTranscript(text);
-      if (result.isFinal) {
-        setTranscript("");
-        sendToAI(text, lang);
+      let interimTranscript = "";
+      let finalTranscript = "";
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const result = event.results[i];
+        if (result.isFinal) finalTranscript += result[0].transcript;
+        else interimTranscript += result[0].transcript;
+      }
+      if (interimTranscript) setTranscript(interimTranscript);
+      if (finalTranscript.trim()) {
+        setTranscript(finalTranscript);
+        clearTimeout(finalTranscriptTimeout);
+        finalTranscriptTimeout = setTimeout(() => {
+          setTranscript("");
+          sendToAI(finalTranscript.trim());
+        }, 500);
       }
     };
 
     recognition.onerror = (e) => {
+      console.log("Recognition error:", e.error);
+      if (e.error === "no-speech" || e.error === "aborted") return;
       setIsListening(false);
-      if (e.error !== "no-speech" && callActiveRef.current) {
-        setTimeout(() => startListening(lang), 1000);
+    };
+
+    recognition.onend = () => {
+      console.log("Recognition ended, callActive:", callActiveRef.current);
+      setIsListening(false);
+      if (callActiveRef.current && !window.speechSynthesis.speaking) {
+        setTimeout(() => { if (callActiveRef.current) startListening(); }, 300);
       }
     };
 
-    recognition.onend = () => setIsListening(false);
-
     recognitionRef.current = recognition;
-    recognition.start();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    try { recognition.start(); } catch (e) { console.log("Start error:", e); }
+  }, [selectedLang]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Send to NVIDIA AI ───────────────────────────────────────────────────────
-  const sendToAI = useCallback(async (userMessage, lang) => {
+  const sendToAI = useCallback(async (userMessage) => {
     setIsThinking(true);
     setIsListening(false);
+    console.log("Sending to AI:", userMessage);
 
-    const isEmergency = EMERGENCY_WORDS.some((w) =>
-      userMessage.toLowerCase().includes(w)
-    );
+    const isEmergency = EMERGENCY_WORDS.some((w) => userMessage.toLowerCase().includes(w.toLowerCase()));
+    const isPanic     = PANIC_WORDS.some((w) => userMessage.toLowerCase().includes(w.toLowerCase()));
 
     if (isEmergency) {
       onSOSTrigger?.();
-      const emergencyReply = lang.startsWith("hi")
-        ? "आपका SOS भेज दिया गया है। मदद आ रही है। घबराइए नहीं, शांत रहें।"
-        : "Your SOS has been sent. Help is coming. Stay calm.";
+      const emergencyReply = selectedLang.startsWith("hi")
+        ? "आपका SOS भेज दिया गया है। मदद आ रही है। घबराइए नहीं, शांत रहें। हम आपके पास आ रहे हैं।"
+        : "Your SOS has been sent. Help is coming. Stay calm. We are on our way.";
       setAiResponse(emergencyReply);
       setIsThinking(false);
       setIsSpeaking(true);
-      speak(emergencyReply, lang, () => {
+      speak(emergencyReply, selectedLang, () => {
         setIsSpeaking(false);
-        if (callActiveRef.current) setTimeout(() => startListening(lang), 500);
+        if (callActiveRef.current) setTimeout(() => startListening(), 300);
+      });
+      return;
+    }
+
+    if (isPanic) {
+      onPanicDetected?.();
+      const panicReply = selectedLang.startsWith("hi")
+        ? "घबराइए नहीं। आप सुरक्षित हैं। गहरी सांस लें। मैं आपके साथ हूं।"
+        : "Do not panic. You are safe. Take a deep breath. I am with you.";
+      setAiResponse(panicReply);
+      setIsThinking(false);
+      setIsSpeaking(true);
+      speak(panicReply, selectedLang, () => {
+        setIsSpeaking(false);
+        if (callActiveRef.current) setTimeout(() => startListening(), 300);
       });
       return;
     }
@@ -152,6 +181,7 @@ export default function VoiceAI({ onSOSTrigger, onPanicDetected }) {
       ...conversationRef.current.slice(-6),
       { role: "user", content: userMessage },
     ];
+    console.log("Messages count:", messages.length);
 
     try {
       const controller = new AbortController();
@@ -160,13 +190,16 @@ export default function VoiceAI({ onSOSTrigger, onPanicDetected }) {
       const res = await fetch("/api/ai/voice-chat", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ messages, language: lang }),
+        body:    JSON.stringify({ messages, language: selectedLang, userMessage }),
         signal:  controller.signal,
       });
       clearTimeout(timeout);
 
+      console.log("Response status:", res.status);
       const data = await res.json();
-      const aiText = data.response || (lang.startsWith("hi") ? "मैं सुन रहा हूं। आप सुरक्षित हैं।" : "I hear you. You are safe.");
+      console.log("AI response:", data.response);
+
+      const aiText = data.response || (selectedLang.startsWith("hi") ? "मैं सुन रहा हूं। आप सुरक्षित हैं।" : "I hear you. You are safe.");
 
       const updated = [
         ...conversationRef.current,
@@ -177,36 +210,30 @@ export default function VoiceAI({ onSOSTrigger, onPanicDetected }) {
       setConversation(updated);
       setAiResponse(aiText);
 
-      if (aiText.toLowerCase().includes("panic") || aiText.toLowerCase().includes("calm")) {
-        onPanicDetected?.();
-      }
+      if (aiText.toLowerCase().includes("panic") || aiText.toLowerCase().includes("calm")) onPanicDetected?.();
 
       setIsThinking(false);
       setIsSpeaking(true);
-      speak(aiText, lang, () => {
+      speak(aiText, selectedLang, () => {
         setIsSpeaking(false);
-        if (callActiveRef.current) setTimeout(() => startListening(lang), 500);
+        if (callActiveRef.current) setTimeout(() => startListening(), 300);
       });
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.error("VoiceAI fetch error:", err.name, err.message);
-
-      // Smart fallback pool — context-aware, always responds
-      const fallbackPool = lang.startsWith("hi")
-        ? ["मैं सुन रहा हूं। आप सुरक्षित हैं।", "घबराइए नहीं। मदद रास्ते में है।", "आपकी मदद के लिए टीम तैयार है।"]
-        : ["I hear you. You are safe.", "Do not panic. Help is on the way.", "Our team is ready to help you."];
+      const fallbackPool = selectedLang.startsWith("hi")
+        ? ["मैं समझ गया। आप सुरक्षित हैं। बताइए और क्या चाहिए।", "ठीक है। मदद रास्ते में है। शांत रहें।", "आपकी बात सुन रहा हूं। घबराइए नहीं।", "सब ठीक होगा। हम आपके साथ हैं।"]
+        : ["I understand. You are safe. Tell me what else you need.", "Okay. Help is on the way. Stay calm.", "I hear you. Do not panic.", "Everything will be okay. We are with you."];
       const aiText = fallbackPool[Math.floor(Math.random() * fallbackPool.length)];
       setAiResponse(aiText);
       setIsThinking(false);
       setIsSpeaking(true);
-      speak(aiText, lang, () => {
+      speak(aiText, selectedLang, () => {
         setIsSpeaking(false);
-        if (callActiveRef.current) setTimeout(() => startListening(lang), 500);
+        if (callActiveRef.current) setTimeout(() => startListening(), 300);
       });
     }
-  }, [onSOSTrigger, onPanicDetected, startListening]);
+  }, [selectedLang, onSOSTrigger, onPanicDetected, startListening]);
 
-  // ── Start call ──────────────────────────────────────────────────────────────
   const startCall = useCallback(async () => {
     await window.speechSynthesis?.resume?.();
     callActiveRef.current = true;
@@ -220,11 +247,10 @@ export default function VoiceAI({ onSOSTrigger, onPanicDetected }) {
     setIsSpeaking(true);
     speak(greeting, selectedLang, () => {
       setIsSpeaking(false);
-      startListening(selectedLang);
+      startListening();
     });
   }, [selectedLang, startListening]);
 
-  // ── End call ────────────────────────────────────────────────────────────────
   const endCall = useCallback(() => {
     callActiveRef.current = false;
     setCallActive(false);
@@ -240,46 +266,19 @@ export default function VoiceAI({ onSOSTrigger, onPanicDetected }) {
     setConversation([]);
   }, []);
 
-  const statusLabel =
-    isThinking  ? (THINKING_LABEL[selectedLang]  || "Thinking…") :
-    isSpeaking  ? (SPEAKING_LABEL[selectedLang]  || "Speaking…") :
-    isListening ? (LISTENING_LABEL[selectedLang] || "Listening…") :
-    "SankatBot";
-
+  const statusLabel = isThinking ? (THINKING_LABEL[selectedLang] || "Thinking…") : isSpeaking ? (SPEAKING_LABEL[selectedLang] || "Speaking…") : isListening ? (LISTENING_LABEL[selectedLang] || "Listening…") : "SankatBot";
   const avatarBorder = isSpeaking ? "#10B981" : isListening ? "#3B82F6" : "#6366F1";
-  const avatarBg     = isSpeaking ? "rgba(16,185,129,0.25)" : isListening ? "rgba(59,130,246,0.25)" : "rgba(99,102,241,0.25)";
+  const avatarBg = isSpeaking ? "rgba(16,185,129,0.25)" : isListening ? "rgba(59,130,246,0.25)" : "rgba(99,102,241,0.25)";
 
-  // ── Closed state — floating button ─────────────────────────────────────────
   if (!isOpen) {
     return (
       <div style={{ position: "fixed", bottom: "100px", left: "24px", zIndex: 9997, display: "flex", flexDirection: "column", alignItems: "center", gap: "6px" }}>
-        {/* Language pills */}
         {Object.entries(LANGUAGES).map(([code, name]) => (
-          <button
-            key={code}
-            onClick={() => setSelectedLang(code)}
-            style={{
-              padding: "3px 10px", borderRadius: "20px", fontSize: "11px", cursor: "pointer",
-              border: selectedLang === code ? "1px solid #10B981" : "1px solid rgba(255,255,255,0.2)",
-              background: selectedLang === code ? "rgba(16,185,129,0.2)" : "rgba(0,0,0,0.6)",
-              color: "white",
-            }}
-          >
+          <button key={code} onClick={() => setSelectedLang(code)} style={{ padding: "3px 10px", borderRadius: "20px", fontSize: "11px", cursor: "pointer", border: selectedLang === code ? "1px solid #10B981" : "1px solid rgba(255,255,255,0.2)", background: selectedLang === code ? "rgba(16,185,129,0.2)" : "rgba(0,0,0,0.6)", color: "white" }}>
             {name}
           </button>
         ))}
-
-        {/* Green phone button */}
-        <button
-          onClick={startCall}
-          style={{
-            width: "64px", height: "64px", borderRadius: "50%",
-            background: "#10B981", border: "none", cursor: "pointer",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            boxShadow: "0 0 0 4px rgba(16,185,129,0.3)",
-            marginTop: "4px",
-          }}
-        >
+        <button onClick={startCall} style={{ width: "64px", height: "64px", borderRadius: "50%", background: "#10B981", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 0 0 4px rgba(16,185,129,0.3)", marginTop: "4px" }}>
           <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
             <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z" />
           </svg>
@@ -289,115 +288,52 @@ export default function VoiceAI({ onSOSTrigger, onPanicDetected }) {
     );
   }
 
-  // ── Active call UI ──────────────────────────────────────────────────────────
   return (
-    <div style={{
-      position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
-      background: "rgba(0,0,0,0.95)", zIndex: 9998,
-      display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-      padding: "24px",
-    }}>
-      {/* Avatar */}
-      <div style={{
-        width: "120px", height: "120px", borderRadius: "50%",
-        background: avatarBg, border: `3px solid ${avatarBorder}`,
-        display: "flex", alignItems: "center", justifyContent: "center",
-        marginBottom: "20px",
-        animation: (isSpeaking || isListening) ? "pulse 1.5s infinite" : "none",
-        transition: "border-color 0.3s, background 0.3s",
-      }}>
+    <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.95)", zIndex: 9998, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "24px" }}>
+      <div style={{ width: "120px", height: "120px", borderRadius: "50%", background: avatarBg, border: `3px solid ${avatarBorder}`, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: "20px", animation: (isSpeaking || isListening) ? "pulse 1.5s infinite" : "none", transition: "border-color 0.3s, background 0.3s" }}>
         <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.5">
           <path d="M12 2a3 3 0 013 3v7a3 3 0 01-6 0V5a3 3 0 013-3z" />
           <path d="M19 10v2a7 7 0 01-14 0v-2M12 19v3M8 22h8" />
         </svg>
       </div>
-
-      {/* Status */}
-      <p style={{ color: "#10B981", fontSize: "14px", marginBottom: "12px", fontWeight: 500 }}>
-        {statusLabel}
-      </p>
-
-      {/* AI response bubble */}
+      <p style={{ color: "#10B981", fontSize: "14px", marginBottom: "12px", fontWeight: 500 }}>{statusLabel}</p>
       {aiResponse && (
-        <div style={{
-          background: "rgba(16,185,129,0.1)", border: "1px solid rgba(16,185,129,0.3)",
-          borderRadius: "16px", padding: "14px 18px", maxWidth: "320px",
-          marginBottom: "12px", textAlign: "center",
-        }}>
-          <p style={{ color: "#F9FAFB", fontSize: "16px", lineHeight: "1.6", margin: 0 }}>
-            {aiResponse}
-          </p>
+        <div style={{ background: "rgba(16,185,129,0.1)", border: "1px solid rgba(16,185,129,0.3)", borderRadius: "16px", padding: "14px 18px", maxWidth: "320px", marginBottom: "12px", textAlign: "center" }}>
+          <p style={{ color: "#F9FAFB", fontSize: "16px", lineHeight: "1.6", margin: 0 }}>{aiResponse}</p>
         </div>
       )}
-
-      {/* User transcript */}
       {transcript && (
-        <div style={{
-          background: "rgba(59,130,246,0.1)", border: "1px solid rgba(59,130,246,0.3)",
-          borderRadius: "12px", padding: "10px 16px", maxWidth: "320px", marginBottom: "12px",
-        }}>
+        <div style={{ background: "rgba(59,130,246,0.1)", border: "1px solid rgba(59,130,246,0.3)", borderRadius: "12px", padding: "10px 16px", maxWidth: "320px", marginBottom: "12px" }}>
           <p style={{ color: "#93C5FD", fontSize: "14px", margin: 0 }}>आप: {transcript}</p>
         </div>
       )}
-
-      {/* Conversation history */}
       {conversation.length > 0 && (
         <div style={{ maxHeight: "140px", overflowY: "auto", width: "100%", maxWidth: "320px", marginBottom: "20px" }}>
           {conversation.slice(-4).map((msg, i) => (
             <div key={i} style={{ textAlign: msg.role === "user" ? "right" : "left", marginBottom: "6px" }}>
-              <span style={{
-                display: "inline-block", padding: "6px 12px", borderRadius: "12px", fontSize: "12px",
-                background: msg.role === "user" ? "rgba(59,130,246,0.2)" : "rgba(16,185,129,0.2)",
-                color: "#F9FAFB", maxWidth: "80%",
-              }}>
+              <span style={{ display: "inline-block", padding: "6px 12px", borderRadius: "12px", fontSize: "12px", background: msg.role === "user" ? "rgba(59,130,246,0.2)" : "rgba(16,185,129,0.2)", color: "#F9FAFB", maxWidth: "80%" }}>
                 {msg.content}
               </span>
             </div>
           ))}
         </div>
       )}
-
-      {/* Manual mic button — shown when idle */}
       {!isListening && !isSpeaking && !isThinking && (
-        <button
-          onClick={() => startListening(selectedLang)}
-          style={{
-            width: "72px", height: "72px", borderRadius: "50%",
-            background: "#3B82F6", border: "none", cursor: "pointer",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            marginBottom: "16px", boxShadow: "0 0 0 4px rgba(59,130,246,0.25)",
-          }}
-        >
+        <button onClick={() => startListening()} style={{ width: "72px", height: "72px", borderRadius: "50%", background: "#3B82F6", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: "16px", boxShadow: "0 0 0 4px rgba(59,130,246,0.25)" }}>
           <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
             <path d="M12 2a3 3 0 013 3v7a3 3 0 01-6 0V5a3 3 0 013-3z" />
             <path d="M19 10v2a7 7 0 01-14 0v-2M12 19v3M8 22h8" />
           </svg>
         </button>
       )}
-
-      {/* End call */}
-      <button
-        onClick={endCall}
-        style={{
-          width: "64px", height: "64px", borderRadius: "50%",
-          background: "#EF4444", border: "none", cursor: "pointer",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          boxShadow: "0 0 0 4px rgba(239,68,68,0.25)",
-        }}
-      >
+      <button onClick={endCall} style={{ width: "64px", height: "64px", borderRadius: "50%", background: "#EF4444", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 0 0 4px rgba(239,68,68,0.25)" }}>
         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
           <path d="M10.68 13.31a16 16 0 003.41 2.6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6L3.07 9.8A19.79 19.79 0 012 2.18C2 1.94 2.94 2 3 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L7.73 9.9" />
           <line x1="23" y1="1" x2="1" y2="23" />
         </svg>
       </button>
       <p style={{ color: "#6B7280", fontSize: "12px", marginTop: "8px" }}>Call समाप्त करें</p>
-
-      <style>{`
-        @keyframes pulse {
-          0%, 100% { box-shadow: 0 0 0 0 ${avatarBorder}44; }
-          50%       { box-shadow: 0 0 0 12px ${avatarBorder}00; }
-        }
-      `}</style>
+      <style>{`@keyframes pulse { 0%, 100% { box-shadow: 0 0 0 0 ${avatarBorder}44; } 50% { box-shadow: 0 0 0 12px ${avatarBorder}00; } }`}</style>
     </div>
   );
 }
