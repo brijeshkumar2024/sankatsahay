@@ -3,39 +3,13 @@ import { Circle, CircleMarker, Marker, Popup, TileLayer, MapContainer, Tooltip, 
 import Card from "../ui/Card";
 import useActiveAnimation from "../../hooks/useActiveAnimation";
 
-// ── HARDCODED demo center — always Odisha coast, never GPS ───────────────────
 const ODISHA_CENTER = [20.2961, 85.8245];
 const ODISHA_ZOOM   = 9;
 
-// ── Hardcoded demo markers — visible from second 1, no sim-control needed ────
 const DEMO_ZONES = [
-  {
-    id:          "demo-bhubaneswar",
-    center:      [20.2961, 85.8245],
-    radius:      8000,
-    color:       "#FF3B30",
-    fillOpacity: 0.3,
-    label:       "Bhubaneswar SOS Zone",
-    severity:    "CRITICAL",
-  },
-  {
-    id:          "demo-puri",
-    center:      [19.8135, 85.8312],
-    radius:      12000,
-    color:       "#FF3B30",
-    fillOpacity: 0.4,
-    label:       "Puri Coastal Impact",
-    severity:    "CRITICAL",
-  },
-  {
-    id:          "demo-cuttack",
-    center:      [20.4625, 85.8830],
-    radius:      6000,
-    color:       "#F59E0B",
-    fillOpacity: 0.25,
-    label:       "Cuttack Warning Zone",
-    severity:    "WARNING",
-  },
+  { id: "demo-bhubaneswar", center: [20.2961, 85.8245], radius: 8000,  label: "Bhubaneswar SOS Zone", severity: "CRITICAL" },
+  { id: "demo-puri",        center: [19.8135, 85.8312], radius: 12000, label: "Puri Coastal Impact",  severity: "CRITICAL" },
+  { id: "demo-cuttack",     center: [20.4625, 85.8830], radius: 6000,  label: "Cuttack Warning Zone", severity: "WARNING"  },
 ];
 
 const DEMO_SHELTERS = [
@@ -54,16 +28,6 @@ function normalizeRisk(value = "safe") {
   return String(value).toLowerCase();
 }
 
-/**
- * activeAnimation — only ONE animation runs at a time:
- *   "cyclone-pulse"   → risk zones breathe
- *   "sos-pulse"       → SOS markers pulse
- *   "route-highlight" → evac route visible
- *   null              → no animation
- *
- * Map center is ALWAYS Odisha coast [20.2961, 85.8245] at zoom 9.
- * navigator.geolocation is NOT used here.
- */
 export default function LiveMap({ pins = [], riskZones = [], phase = 0, activeAnimation = null }) {
   const animation = useActiveAnimation();
 
@@ -71,40 +35,50 @@ export default function LiveMap({ pins = [], riskZones = [], phase = 0, activeAn
   const showSOSPulse  = animation.sosPulse  || activeAnimation === "sos-pulse";
   const showRoute     = activeAnimation === "route-highlight" || phase >= 2;
 
+  // Standby = no active animation → dim gray circles, no pulse
+  const isStandby  = !activeAnimation && !animation.riskPulse;
+  const zoneColor  = isStandby ? "#6B7280" : "#EF4444";
+  const zoneFill   = isStandby ? "#6B7280" : "#EF4444";
+  const zoneOpacity = isStandby ? 0.05 : 0.28;
+  const zoneWeight  = isStandby ? 1 : 2;
+
+  // Cuttack is warning-level — amber even in active state
+  const cuttackColor   = isStandby ? "#6B7280" : "#F59E0B";
+  const cuttackOpacity = isStandby ? 0.05 : 0.2;
+
   return (
     <Card className="map-shell h-[480px] p-3">
-      <MapContainer
-        center={ODISHA_CENTER}
-        zoom={ODISHA_ZOOM}
-        scrollWheelZoom
-        className="h-full w-full"
-      >
+      <MapContainer center={ODISHA_CENTER} zoom={ODISHA_ZOOM} scrollWheelZoom className="h-full w-full">
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
 
-        {/* ── Hardcoded demo zones — always visible ─────────────────────── */}
-        {DEMO_ZONES.map((zone) => (
-          <Circle
-            key={zone.id}
-            center={zone.center}
-            radius={zone.radius}
-            pathOptions={{
-              color:       zone.color,
-              fillColor:   zone.color,
-              fillOpacity: zone.fillOpacity,
-              weight:      2,
-              className:   showRiskPulse ? "radar-zone" : "",
-            }}
-          >
-            <Tooltip direction="top" permanent={false}>
-              {zone.label} · {zone.severity}
-            </Tooltip>
-          </Circle>
-        ))}
+        {/* ── Hardcoded demo zones — color/opacity driven by activeAnimation ── */}
+        {DEMO_ZONES.map((zone) => {
+          const isWarning = zone.severity === "WARNING";
+          const color     = isWarning ? cuttackColor   : zoneColor;
+          const fillOp    = isWarning ? cuttackOpacity : zoneOpacity;
+          return (
+            <Circle
+              key={zone.id}
+              center={zone.center}
+              radius={zone.radius}
+              pathOptions={{
+                color,
+                fillColor:   color,
+                fillOpacity: fillOp,
+                weight:      zoneWeight,
+                // Pulse class ONLY when cyclone animation is active
+                className:   showRiskPulse ? "radar-zone" : "",
+              }}
+            >
+              <Tooltip direction="top">{zone.label} · {zone.severity}</Tooltip>
+            </Circle>
+          );
+        })}
 
-        {/* ── Hardcoded shelter markers — always visible ────────────────── */}
+        {/* ── Shelter markers — always green ───────────────────────────── */}
         {DEMO_SHELTERS.map((s) => (
           <CircleMarker
             key={s.id}
@@ -116,7 +90,7 @@ export default function LiveMap({ pins = [], riskZones = [], phase = 0, activeAn
           </CircleMarker>
         ))}
 
-        {/* ── Live risk zones from simulation ───────────────────────────── */}
+        {/* ── Live risk zones from simulation ──────────────────────────── */}
         {riskZones.map((zone) => (
           <Circle
             key={zone.id}
@@ -129,13 +103,11 @@ export default function LiveMap({ pins = [], riskZones = [], phase = 0, activeAn
               className:   showRiskPulse ? "radar-zone" : "",
             }}
           >
-            <Tooltip direction="top">
-              {zone.name} · {zone.severity}
-            </Tooltip>
+            <Tooltip direction="top">{zone.name} · {zone.severity}</Tooltip>
           </Circle>
         ))}
 
-        {/* ── Live SOS / volunteer pins from simulation ─────────────────── */}
+        {/* ── Live SOS / volunteer pins ─────────────────────────────────── */}
         {pins.slice(0, 40).map((pin) => (
           <Circle
             key={`${pin.id}-ring`}
@@ -159,14 +131,10 @@ export default function LiveMap({ pins = [], riskZones = [], phase = 0, activeAn
           </Marker>
         ))}
 
-        {/* ── Evac route — only when route animation or phase ≥ 2 ─────── */}
+        {/* ── Evac route ───────────────────────────────────────────────── */}
         {showRoute && (
           <Polyline
-            positions={[
-              [20.35, 85.72],
-              [20.52, 85.90],
-              [20.70, 86.10],
-            ]}
+            positions={[[20.35, 85.72], [20.52, 85.90], [20.70, 86.10]]}
             pathOptions={{ color: "#79D4FF", weight: 3, dashArray: "8 7" }}
           />
         )}
