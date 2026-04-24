@@ -241,7 +241,7 @@ export default function VoiceAI({ onSOSTrigger, onPanicDetected }) {
   // ── Closed state — floating button ─────────────────────────────────────────
   if (!isOpen) {
     return (
-      <div style={{ position: "fixed", bottom: "100px", right: "24px", zIndex: 9997, display: "flex", flexDirection: "column", alignItems: "center", gap: "6px" }}>
+      <div style={{ position: "fixed", bottom: "100px", left: "24px", zIndex: 9997, display: "flex", flexDirection: "column", alignItems: "center", gap: "6px" }}>
         {/* Language pills */}
         {Object.entries(LANGUAGES).map(([code, name]) => (
           <button

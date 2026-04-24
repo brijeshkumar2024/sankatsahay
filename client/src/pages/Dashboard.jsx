@@ -2,7 +2,6 @@ import { useEffect } from "react";
 import { motion } from "framer-motion";
 import LiveMap from "../components/map/LiveMap";
 import Card from "../components/ui/Card";
-import DemoBanner from "../components/shared/DemoBanner";
 import useAppStore from "../store/useAppStore";
 import useSocket from "../hooks/useSocket";
 import useSimulationFeed from "../hooks/useSimulationFeed";

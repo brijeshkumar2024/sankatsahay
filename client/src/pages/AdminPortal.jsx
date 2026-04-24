@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Circle, CircleMarker, MapContainer, Marker, Polygon, Popup, TileLayer } from "react-leaflet";
 import Card from "../components/ui/Card";
@@ -7,12 +7,13 @@ import useAppStore from "../store/useAppStore";
 import useSocket from "../hooks/useSocket";
 import { api } from "../services/api";
 import useSimulationFeed from "../hooks/useSimulationFeed";
+import useDemoStore from "../store/useDemoStore";
 
-// ── Same hardcoded Odisha markers as Dashboard/LiveMap ────────────────────────
+// Hardcoded Odisha zones — colors driven by activeAnimation (same logic as LiveMap)
 const DEMO_ZONES = [
-  { id: "demo-bhubaneswar", center: [20.2961, 85.8245], radius: 8000,  color: "#FF3B30", fillOpacity: 0.3,  label: "Bhubaneswar SOS Zone" },
-  { id: "demo-puri",        center: [19.8135, 85.8312], radius: 12000, color: "#FF3B30", fillOpacity: 0.4,  label: "Puri Coastal Impact" },
-  { id: "demo-cuttack",     center: [20.4625, 85.8830], radius: 6000,  color: "#F59E0B", fillOpacity: 0.25, label: "Cuttack Warning Zone" },
+  { id: "demo-bhubaneswar", center: [20.2961, 85.8245], radius: 8000,  severity: "CRITICAL", label: "Bhubaneswar SOS Zone" },
+  { id: "demo-puri",        center: [19.8135, 85.8312], radius: 12000, severity: "CRITICAL", label: "Puri Coastal Impact" },
+  { id: "demo-cuttack",     center: [20.4625, 85.8830], radius: 6000,  severity: "WARNING",  label: "Cuttack Warning Zone" },
 ];
 
 const DEMO_SHELTERS = [
@@ -34,8 +35,16 @@ export default function AdminPortal() {
   const token    = useAppStore((s) => s.token) || localStorage.getItem("sankat-token");
   const socket   = useSocket(token);
   useSimulationFeed(socket);
-  const demand   = useAppStore((s) => s.volunteerDemand);
-  const familySt = useAppStore((s) => s.familyStatus);
+  const demand        = useAppStore((s) => s.volunteerDemand);
+  const familySt      = useAppStore((s) => s.familyStatus);
+  const activeAnimation = useDemoStore((s) => s.activeAnimation);
+
+  // Same standby logic as LiveMap
+  const isStandby   = !activeAnimation;
+  const zoneColor   = isStandby ? "#6B7280" : "#EF4444";
+  const zoneOpacity = isStandby ? 0.05 : 0.28;
+  const cuttackColor   = isStandby ? "#6B7280" : "#F59E0B";
+  const cuttackOpacity = isStandby ? 0.05 : 0.2;
 
   const [stats, setStats] = useState({ activeSOS: 0, deployedVolunteers: 0, familiesReunited: 0 });
   const [data,  setData]  = useState({ alerts: [], volunteers: [], zones: [], shelters: [] });
@@ -98,17 +107,22 @@ export default function AdminPortal() {
               attribution="&copy; OpenStreetMap"
             />
 
-            {/* Hardcoded demo zones — always visible */}
-            {DEMO_ZONES.map((zone) => (
-              <Circle
-                key={zone.id}
-                center={zone.center}
-                radius={zone.radius}
-                pathOptions={{ color: zone.color, fillColor: zone.color, fillOpacity: zone.fillOpacity, weight: 2 }}
-              >
-                <Popup>{zone.label}</Popup>
-              </Circle>
-            ))}
+            {/* Hardcoded demo zones — color driven by activeAnimation */}
+            {DEMO_ZONES.map((zone) => {
+              const isWarning = zone.severity === "WARNING";
+              const color     = isWarning ? cuttackColor   : zoneColor;
+              const fillOp    = isWarning ? cuttackOpacity : zoneOpacity;
+              return (
+                <Circle
+                  key={zone.id}
+                  center={zone.center}
+                  radius={zone.radius}
+                  pathOptions={{ color, fillColor: color, fillOpacity: fillOp, weight: isStandby ? 1 : 2 }}
+                >
+                  <Popup>{zone.label}</Popup>
+                </Circle>
+              );
+            })}
 
             {/* Hardcoded shelter markers — always visible */}
             {DEMO_SHELTERS.map((s) => (
