@@ -45,7 +45,7 @@ router.post("/volunteer-guidance/stream", requireAuth, async (req, res) => {
   await streamVolunteerGuidance(req.body.taskData || {}, res);
 });
 
-// ── Voice chat — no auth, used by VoiceAI component ──────────────────────────
+// ── Voice chat — no auth, used by VoiceAI ────────────────────────────────────
 router.post("/voice-chat", async (req, res) => {
   const { messages = [], language = "hi-IN" } = req.body;
   const isHindi = language.startsWith("hi");
@@ -53,9 +53,22 @@ router.post("/voice-chat", async (req, res) => {
   // eslint-disable-next-line no-console
   console.log("[voice-chat] lang:", language,
     "| msgs:", messages.length,
-    "| NVIDIA_BASE_URL:", process.env.NVIDIA_BASE_URL,
     "| model:", process.env.NVIDIA_MODEL,
-    "| key exists:", !!process.env.NVIDIA_API_KEY);
+    "| key:", !!process.env.NVIDIA_API_KEY);
+
+  const smartFallback = (lastMsg = "") => {
+    const m = lastMsg.toLowerCase();
+    if (m.includes("kahan") || m.includes("where"))
+      return isHindi ? "\u0906\u092a \u0938\u0939\u0940 \u0930\u093e\u0938\u094d\u0924\u0947 \u092a\u0930 \u0939\u0948\u0902\u0964 \u0938\u0940\u0927\u0947 \u0906\u0917\u0947 \u092c\u0922\u093c\u0947\u0902\u0964" : "You are on the right path. Keep going.";
+    if (m.includes("dar") || m.includes("scared") || m.includes("ghabra"))
+      return isHindi ? "\u0918\u092c\u0930\u093e\u0907\u090f \u0928\u0939\u0940\u0902\u0964 \u0906\u092a \u0938\u0941\u0930\u0915\u094d\u0937\u093f\u0924 \u0939\u0948\u0902\u0964 \u092e\u0926\u0926 \u0906 \u0930\u0939\u0940 \u0939\u0948\u0964" : "Do not be afraid. You are safe. Help is coming.";
+    if (m.includes("help") || m.includes("madad"))
+      return isHindi ? "\u0906\u092a\u0915\u0940 \u092e\u0926\u0926 \u0915\u0947 \u0932\u093f\u090f \u091f\u0940\u092e \u092d\u0947\u091c\u0940 \u091c\u093e \u0930\u0939\u0940 \u0939\u0948\u0964 \u0930\u0941\u0915\u093f\u090f\u0964" : "A team is being sent to help you. Please wait.";
+    const pool = isHindi
+      ? ["\u092e\u0948\u0902 \u0938\u0941\u0928 \u0930\u0939\u093e \u0939\u0942\u0902\u0964 \u0906\u092a \u0938\u0941\u0930\u0915\u094d\u0937\u093f\u0924 \u0939\u0948\u0902\u0964", "\u0918\u092c\u0930\u093e\u0907\u090f \u0928\u0939\u0940\u0902\u0964 \u092e\u0926\u0926 \u0930\u093e\u0938\u094d\u0924\u0947 \u092e\u0947\u0902 \u0939\u0948\u0964", "\u0906\u092a\u0915\u0940 \u092e\u0926\u0926 \u0915\u0947 \u0932\u093f\u090f \u091f\u0940\u092e \u0924\u0948\u092f\u093e\u0930 \u0939\u0948\u0964"]
+      : ["I hear you. You are safe.", "Do not panic. Help is on the way.", "Our team is ready to help you."];
+    return pool[Math.floor(Math.random() * pool.length)];
+  };
 
   try {
     const { default: OpenAI } = await import("openai");
@@ -64,57 +77,39 @@ router.post("/voice-chat", async (req, res) => {
       apiKey:  process.env.NVIDIA_API_KEY,
     });
 
-    // Use provided messages or a safe default — never send empty array
     const payload = messages.length
       ? messages
       : [{ role: "user", content: "Hello, I need help" }];
 
+    // Use working model — openai/gpt-oss-120b returns null content
+    const model = process.env.NVIDIA_MODEL === "openai/gpt-oss-120b"
+      ? "meta/llama-3.1-8b-instruct"
+      : (process.env.NVIDIA_MODEL || "meta/llama-3.1-8b-instruct");
+
     const completion = await client.chat.completions.create({
-      model:       process.env.NVIDIA_MODEL || "meta/llama-3.1-8b-instruct",
+      model,
       messages:    payload,
       max_tokens:  80,
       temperature: 0.7,
     });
 
-    const response = completion.choices[0]?.message?.content ||
-      (isHindi ? "\u092e\u0926\u0926 \u0906 \u0930\u0939\u0940 \u0939\u0948\u0964 \u0936\u093e\u0902\u0924 \u0930\u0939\u0947\u0902\u0964" : "Help is coming. Stay calm.");
-
+    const content = completion.choices[0]?.message?.content;
     // eslint-disable-next-line no-console
-    console.log("[voice-chat] OK:", response.slice(0, 80));
-    return res.json({ response });
+    console.log("[voice-chat] content:", content);
+
+    // Null content means wrong model — use smart fallback
+    if (!content) {
+      const lastMsg = messages.slice(-1)[0]?.content || "";
+      return res.json({ response: smartFallback(lastMsg) });
+    }
+
+    return res.json({ response: content });
 
   } catch (err) {
     // eslint-disable-next-line no-console
-    console.error("[voice-chat] NVIDIA error:", err.message, "| status:", err.status);
-
-    // Context-aware smart fallback — never show raw error to user
-    const lastMsg = (messages.slice(-1)[0]?.content || "").toLowerCase();
-
-    let fallback;
-    if (lastMsg.includes("kahan") || lastMsg.includes("where") || lastMsg.includes("\u0915\u0939\u093e\u0902")) {
-      fallback = isHindi
-        ? "\u0906\u092a \u0938\u0939\u0940 \u0930\u093e\u0938\u094d\u0924\u0947 \u092a\u0930 \u0939\u0948\u0902\u0964 \u0938\u0940\u0927\u0947 \u0906\u0917\u0947 \u092c\u0922\u093c\u0947\u0902\u0964"
-        : "You are on the right path. Keep going straight.";
-    } else if (lastMsg.includes("dar") || lastMsg.includes("scared") || lastMsg.includes("\u0921\u0930") || lastMsg.includes("afraid")) {
-      fallback = isHindi
-        ? "\u0918\u092c\u0930\u093e\u0907\u090f \u0928\u0939\u0940\u0902\u0964 \u0906\u092a \u0938\u0941\u0930\u0915\u094d\u0937\u093f\u0924 \u0939\u0948\u0902\u0964 \u092e\u0926\u0926 \u0906 \u0930\u0939\u0940 \u0939\u0948\u0964"
-        : "Do not be afraid. You are safe. Help is coming.";
-    } else if (lastMsg.includes("help") || lastMsg.includes("madad") || lastMsg.includes("\u092e\u0926\u0926")) {
-      fallback = isHindi
-        ? "\u0906\u092a\u0915\u0940 \u092e\u0926\u0926 \u0915\u0947 \u0932\u093f\u090f \u091f\u0940\u092e \u092d\u0947\u091c\u0940 \u091c\u093e \u0930\u0939\u0940 \u0939\u0948\u0964 \u0930\u0941\u0915\u093f\u090f\u0964"
-        : "A team is being sent to help you. Please wait.";
-    } else if (lastMsg.includes("pani") || lastMsg.includes("flood") || lastMsg.includes("\u092a\u093e\u0928\u0940")) {
-      fallback = isHindi
-        ? "\u0909\u0901\u091a\u0940 \u091c\u0917\u0939 \u091c\u093e\u0907\u090f\u0964 \u092a\u093e\u0928\u0940 \u0938\u0947 \u0926\u0942\u0930 \u0930\u0939\u0947\u0902\u0964"
-        : "Move to higher ground. Stay away from water.";
-    } else {
-      const pool = isHindi
-        ? ["\u092e\u0948\u0902 \u0938\u0941\u0928 \u0930\u0939\u093e \u0939\u0942\u0902\u0964 \u0906\u092a \u0938\u0941\u0930\u0915\u094d\u0937\u093f\u0924 \u0939\u0948\u0902\u0964", "\u0918\u092c\u0930\u093e\u0907\u090f \u0928\u0939\u0940\u0902\u0964 \u092e\u0926\u0926 \u0930\u093e\u0938\u094d\u0924\u0947 \u092e\u0947\u0902 \u0939\u0948\u0964", "\u0906\u092a\u0915\u0940 \u092e\u0926\u0926 \u0915\u0947 \u0932\u093f\u090f \u091f\u0940\u092e \u0924\u0948\u092f\u093e\u0930 \u0939\u0948\u0964"]
-        : ["I hear you. You are safe.", "Do not panic. Help is on the way.", "Our team is ready to help you."];
-      fallback = pool[Math.floor(Math.random() * pool.length)];
-    }
-
-    return res.json({ response: fallback });
+    console.error("[voice-chat] error:", err.message, "| status:", err.status);
+    const lastMsg = messages.slice(-1)[0]?.content || "";
+    return res.json({ response: smartFallback(lastMsg) });
   }
 });
 
