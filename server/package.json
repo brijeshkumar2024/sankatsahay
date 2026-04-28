@@ -24,6 +24,7 @@
     "node-cron": "^3.0.3",
     "nodemailer": "^6.9.13",
     "openai": "^4.0.0",
+    "pdfkit": "^0.18.0",
     "pngjs": "^7.0.0",
     "rss-parser": "^3.13.0",
     "socket.io": "^4.7.4",
