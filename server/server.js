@@ -26,12 +26,13 @@ import simulationRoutes from "./routes/simulation.js";
 const app = express();
 const httpServer = createServer(app);
 const allowedOrigins = [
-  process.env.CLIENT_URL || "http://localhost:5173",
-  process.env.SIM_CONTROL_URL || "http://localhost:5173"
-];
+  process.env.CLIENT_URL,
+  process.env.SIM_CONTROL_URL
+].filter(Boolean);
+const corsOrigins = allowedOrigins.length > 0 ? allowedOrigins : ["http://localhost:5173"];
 const io = new Server(httpServer, {
   cors: {
-    origin: "http://localhost:5173",
+    origin: corsOrigins,
     methods: ["GET", "POST"]
   }
 });
@@ -41,7 +42,7 @@ await connectDB();
 
 app.set("io", io);
 app.use(helmet());
-app.use(cors({ origin: allowedOrigins }));
+app.use(cors({ origin: corsOrigins }));
 app.use(express.json({ limit: "2mb" }));
 app.use(basicRateLimit());
 
