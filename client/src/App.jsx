@@ -21,7 +21,6 @@ import VolunteerRegister from "./pages/VolunteerRegister";
 import VolunteerDashboard from "./pages/VolunteerDashboard";
 import ShelterFinder from "./pages/ShelterFinder";
 import AdminPortal from "./pages/AdminPortal";
-import AdminLogin from "./components/admin/AdminLogin";
 import ResourceTracker from "./pages/ResourceTracker";
 import OfflineMode from "./pages/OfflineMode";
 import DemoRoute from "./pages/DemoRoute";
@@ -32,7 +31,6 @@ export default function App() {
   const location = useLocation();
   const navigate = useNavigate();
   const isSimControl = location.pathname === "/sim-control";
-  const isAdminLogin = location.pathname === "/admin-login";
 
   const token  = useAppStore((s) => s.token) || localStorage.getItem("sankat-token");
   const socket = useSocket(token);
@@ -48,10 +46,10 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-bg text-text">
-      {!isSimControl && !isAdminLogin && <Navbar />}
+      {!isSimControl && <Navbar />}
 
       {/* Single offline notice */}
-      {!isSimControl && !isAdminLogin && offline && (
+      {!isSimControl && offline && (
         <div className="mx-auto max-w-7xl px-4 pt-2">
           <div className="rounded-lg border border-amber-500/40 bg-amber-950/60 px-4 py-2 text-sm text-amber-200">
             OFFLINE MODE — SMS fallback active
@@ -60,14 +58,14 @@ export default function App() {
       )}
 
       {/* Single top banner — replaces all per-page broadcast banners */}
-      {!isSimControl && !isAdminLogin && (
+      {!isSimControl && (
         <div className="mx-auto max-w-7xl px-4 pt-3">
           <DemoBanner />
         </div>
       )}
 
       {/* Step indicator — subtle dot progress + Prev/Next */}
-      {!isSimControl && !isAdminLogin && DEMO_UI_MODE && <DemoStepIndicator />}
+      {!isSimControl && DEMO_UI_MODE && <DemoStepIndicator />}
 
       <AnimatePresence mode="wait">
         <Routes>
@@ -87,7 +85,6 @@ export default function App() {
               </AdminRoute>
             }
           />
-          <Route path="/admin-login" element={<AdminLogin />} />
           <Route path="/resources"   element={<ResourceTracker />} />
           <Route path="/offline"     element={<OfflineMode />} />
           <Route path="/demo"        element={<DemoRoute />} />
@@ -96,14 +93,14 @@ export default function App() {
         </Routes>
       </AnimatePresence>
 
-      {!isSimControl && !isAdminLogin && (
+      {!isSimControl && (
         <footer className="mx-auto mt-8 max-w-7xl border-t border-border px-4 py-4 text-xs text-muted">
           Face data processed locally · No biometric storage · GDPR deletion supported
         </footer>
       )}
 
       {/* VoiceAI — global floating button on every page */}
-      {!isSimControl && !isAdminLogin && (
+      {!isSimControl && (
         <VoiceAI
           onSOSTrigger={() => navigate("/sos")}
           onPanicDetected={() => {}}

@@ -1,13 +1,16 @@
-# Fix Blank Screen at /admin
+# Remove Admin Login Page - Progress Tracker
 
-Current status: Backend server crashing repeatedly (see dev.out.log), causing API fetches to fail → AdminPortal error/loading state appears blank.
+## Completed Steps
+- [x] 1. Create TODO.md with plan breakdown
+- [x] 2. Delete AdminLogin.jsx file
+- [x] 3. Update App.jsx: remove import, route, and isAdminLogin checks
+- [x] 4. Bypass authentication in AdminRoute.jsx for demo access
+- [x] 5. Clean up api.adminLogin reference in api.js (optional)
+- [ ] 6. Test admin dashboard access without login
+- [ ] 7. Mark task complete with attempt_completion
 
-## Steps to Complete:
-1. [ ] Kill running Node.js processes on port 5000 or nodemon.
-2. [ ] cd sankatsahay/server && npm install (ensure deps).
-3. [ ] cd sankatsahay/server && npm run dev (confirm stable 'Server running on port 5000' no crashes).
-4. [ ] Visit http://localhost:5173/admin-login, login: email=admin@sankatsahay.in password=NEXORA2025.
-5. [ ] Navigate to http://localhost:5173/admin - dashboard loads.
-6. [ ] [Optional] Demo data: cd sankatsahay/server && node seedDemoData.js.
+## Notes
+- Plan approved by user
+- Changes target client-side only for demo bypass
+- Server admin APIs remain protected
 
-**Next:** Restart server stable.

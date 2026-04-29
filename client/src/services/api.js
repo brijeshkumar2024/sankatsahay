@@ -21,7 +21,6 @@ export async function request(path, options = {}) {
 
 export const api = {
   login: (email, password) => request("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
-  adminLogin: (email, password) => request("/auth/admin-login", { method: "POST", body: JSON.stringify({ email, password }) }),
   triggerSilentSOS: (payload) => request("/sos/silent", { method: "POST", body: JSON.stringify(payload) }),
   getActiveSOS: () => request("/sos/active"),
   getAdminStats: () => request("/admin/stats"),
