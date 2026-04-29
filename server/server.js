@@ -2,7 +2,7 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
-import { createServer } from "http";
+import { createServer } from "node:http";
 import cron from "node-cron";
 import { Server } from "socket.io";
 import connectDB from "./db.js";
@@ -23,6 +23,9 @@ import adminRoutes from "./routes/admin.js";
 import sensorsRoutes from "./routes/sensors.js";
 import simulationRoutes from "./routes/simulation.js";
 
+import User from "./models/User.js";
+import bcrypt from "bcryptjs";
+
 const app = express();
 const httpServer = createServer(app);
 const allowedOrigins = [
@@ -39,6 +42,29 @@ const io = new Server(httpServer, {
 
 // Connect DB before registering routes.
 await connectDB();
+
+// ── Seed default admin user if not exists ───────────────────────────────────
+try {
+  const adminEmail = process.env.ADMIN_EMAIL || "admin@sankatsahay.in";
+  const adminPassword = process.env.ADMIN_PASSWORD || "NEXORA2025";
+  const exists = await User.findOne({ email: adminEmail.toLowerCase() });
+  if (!exists) {
+    const hash = await bcrypt.hash(adminPassword, 10);
+    await User.create({
+      name: "System Administrator",
+      email: adminEmail.toLowerCase(),
+      password: hash,
+      role: "admin",
+      preferredLanguage: "en",
+      status: "SAFE"
+    });
+    // eslint-disable-next-line no-console
+    console.log("[seed] Admin user created:", adminEmail);
+  }
+} catch (err) {
+  // eslint-disable-next-line no-console
+  console.error("[seed] Admin seed failed:", err.message);
+}
 
 app.set("io", io);
 app.use(helmet());

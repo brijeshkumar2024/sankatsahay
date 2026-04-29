@@ -21,11 +21,27 @@ export async function request(path, options = {}) {
 
 export const api = {
   login: (email, password) => request("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
+  adminLogin: (email, password) => request("/auth/admin-login", { method: "POST", body: JSON.stringify({ email, password }) }),
   triggerSilentSOS: (payload) => request("/sos/silent", { method: "POST", body: JSON.stringify(payload) }),
   getActiveSOS: () => request("/sos/active"),
   getAdminStats: () => request("/admin/stats"),
   getAIDecisions: () => request("/admin/ai-decisions?limit=5"),
   getAdminDashboardData: () => request("/admin/dashboard-data"),
+  getAdminSOS: () => request("/admin/sos"),
+  updateSOSPriority: (id, priority) => request(`/admin/sos/${id}/priority`, { method: "PATCH", body: JSON.stringify({ priority }) }),
+  updateSOSStatus: (id, status) => request(`/admin/sos/${id}/status`, { method: "PATCH", body: JSON.stringify({ status }) }),
+  getAdminVolunteers: () => request("/admin/volunteers"),
+  assignVolunteerTaskByAdmin: (volunteerId, taskId) =>
+    request(`/admin/volunteers/${volunteerId}/assign`, { method: "PATCH", body: JSON.stringify({ taskId }) }),
+  reassignVolunteerByAdmin: (volunteerId) => request(`/admin/volunteers/${volunteerId}/reassign`, { method: "PATCH" }),
+  updateVolunteerStatusByAdmin: (volunteerId, status) =>
+    request(`/admin/volunteers/${volunteerId}/status`, { method: "PATCH", body: JSON.stringify({ status }) }),
+  getCycloneAdminState: () => request("/admin/cyclone/state"),
+  triggerCycloneAlert: (payload) => request("/admin/cyclone/trigger-alert", { method: "POST", body: JSON.stringify(payload) }),
+  getHeatmapAnalytics: () => request("/admin/analytics/heatmap"),
+  getResourceDemandAnalytics: () => request("/admin/analytics/resource-demand"),
+  explainAdminDecision: (decisionType, data = {}) =>
+    request("/admin/ai-decisions/explain", { method: "POST", body: JSON.stringify({ decisionType, data }) }),
   getZones: () => request("/resources/zones"),
   getShelters: () => request("/resources/shelters"),
   getSensorPings: () => request("/resources/sensor-pings"),

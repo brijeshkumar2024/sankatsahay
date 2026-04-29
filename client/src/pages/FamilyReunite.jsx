@@ -7,6 +7,7 @@ import useAppStore from "../store/useAppStore";
 import useSocket from "../hooks/useSocket";
 import { api } from "../services/api";
 import useSimulationFeed from "../hooks/useSimulationFeed";
+import useBluetooth from "../hooks/useBluetooth";
 
 // ── Demo family members — always shown as fallback ────────────────────────────
 const DEMO_FAMILY = [
@@ -28,6 +29,7 @@ export default function FamilyReunite() {
   const user     = useAppStore((s) => s.user) || { name: "Demo User", familyPin: "NEXORA", bloodGroup: "O+" };
   const familySt = useAppStore((s) => s.familyStatus);
   const socket   = useSocket(token);
+  const { devices, supported, simulation, scan } = useBluetooth(socket, user?._id || "demo-user");
   useSimulationFeed(socket);
 
   const qrWrapRef = useRef(null);
@@ -251,6 +253,31 @@ export default function FamilyReunite() {
                   </Button>
                 )}
               </div>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      <Card>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="font-mono text-xs uppercase tracking-widest text-muted">Bluetooth Proximity Assist</p>
+            <p className="mt-1 text-sm text-muted">
+              {supported ? "Web Bluetooth supported" : "Web Bluetooth unavailable, running simulated scan"}
+              {simulation ? " (simulation)" : ""}
+            </p>
+          </div>
+          <Button className="h-10 min-w-0 px-4 text-sm" variant="ghost" onClick={scan}>Rescan Nearby Devices</Button>
+        </div>
+
+        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          {devices.length === 0 && (
+            <p className="text-sm text-muted">No nearby Bluetooth signals detected yet.</p>
+          )}
+          {devices.map((d) => (
+            <div key={d.id} className="rounded-xl border border-border bg-white/5 px-3 py-2">
+              <p className="font-semibold text-text">{d.name || "Unknown Device"}</p>
+              <p className="text-xs text-muted">Approx distance: {d.distanceMeters} m</p>
             </div>
           ))}
         </div>
