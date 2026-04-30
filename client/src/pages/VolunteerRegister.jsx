@@ -2,8 +2,7 @@ import { useCallback, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import Card from "../components/ui/Card";
-
-const API = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+import { api } from "../services/api";
 
 const SKILLS = [
   { id: "medical",      label: "Medical",          icon: "🏥" },
@@ -62,13 +61,7 @@ export default function VolunteerRegister() {
     setLoading(true); setError("");
 
     try {
-      const res  = await fetch(`${API}/tasks/register`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Registration failed");
+      const data = await api.registerVolunteer(form);
 
       localStorage.setItem("volunteerId",   data.volunteer._id);
       localStorage.setItem("volunteerName", data.volunteer.name);

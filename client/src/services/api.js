@@ -1,6 +1,7 @@
 import { DEMO_MODE } from "../config/demoMode";
 
-const BASE_URL = import.meta.env.VITE_API_URL;
+const BASE_URL = import.meta.env.VITE_API_URL || "https://sankatsahay.onrender.com/api";
+console.log("BASE_URL:", import.meta.env.VITE_API_URL, "RESOLVED_BASE_URL:", BASE_URL);
 const DEMO_ADMIN_EMAIL = import.meta.env.VITE_ADMIN_EMAIL || "";
 const DEMO_ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || "";
 
@@ -40,15 +41,28 @@ export async function request(path, options = {}, allowRetry = true) {
   const token = localStorage.getItem("sankat-token");
   const { headers: customHeaders = {}, ...restOptions } = options;
 
+  const doFetch = async (retriesLeft = 1) => {
+    try {
+      return await fetch(`${BASE_URL}${path}`, {
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...customHeaders
+        },
+        ...restOptions
+      });
+    } catch (error) {
+      if (retriesLeft > 0) {
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        return doFetch(retriesLeft - 1);
+      }
+      throw error;
+    }
+  };
+
   try {
-    const res = await fetch(`${BASE_URL}${path}`, {
-      headers: {
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        ...customHeaders
-      },
-      ...restOptions
-    });
+    console.log("API CALL:", `${BASE_URL}${path}`);
+    const res = await doFetch(1);
 
     if (res.status === 401 && allowRetry && !path.startsWith("/auth/")) {
       const refreshedToken = await tryDemoAdminLogin();
@@ -124,6 +138,85 @@ export const api = {
   },
   aiChat: (message, language, context) => request("/ai/chat", { method: "POST", body: JSON.stringify({ message, language, context }) }),
   assignVolunteer: (payload) => request("/volunteer/assign", { method: "POST", body: JSON.stringify(payload) }),
+  registerVolunteer: async (payload) => {
+    try {
+      return await request("/tasks/register", { method: "POST", body: JSON.stringify(payload) });
+    } catch (err) {
+      console.warn("registerVolunteer fallback:", err?.message || "unknown error");
+      return { volunteer: { _id: "demo-volunteer", name: payload?.name || "Demo Volunteer" } };
+    }
+  },
+  getVolunteerTasks: async () => {
+    try {
+      return await request("/tasks");
+    } catch (err) {
+      console.warn("getVolunteerTasks fallback:", err?.message || "unknown error");
+      return { tasks: [] };
+    }
+  },
+  getVolunteerProfile: async (volunteerId) => {
+    try {
+      return await request(`/tasks/profile/${volunteerId}`);
+    } catch (err) {
+      console.warn("getVolunteerProfile fallback:", err?.message || "unknown error");
+      return { volunteer: null };
+    }
+  },
+  getVolunteerMyTasks: async (volunteerId) => {
+    try {
+      return await request(`/tasks/my-tasks/${volunteerId}`);
+    } catch (err) {
+      console.warn("getVolunteerMyTasks fallback:", err?.message || "unknown error");
+      return { tasks: [] };
+    }
+  },
+  acceptVolunteerTask: async (taskId, volunteerId) => {
+    try {
+      return await request(`/tasks/${taskId}/accept`, {
+        method: "POST",
+        body: JSON.stringify({ volunteerId })
+      });
+    } catch (err) {
+      console.warn("acceptVolunteerTask fallback:", err?.message || "unknown error");
+      return { message: "Demo: Task accepted." };
+    }
+  },
+  startVolunteerTask: async (taskId) => {
+    try {
+      return await request(`/tasks/${taskId}/start`, { method: "POST" });
+    } catch (err) {
+      console.warn("startVolunteerTask fallback:", err?.message || "unknown error");
+      return { message: "Demo: Task started." };
+    }
+  },
+  markRescued: async (taskId, payload) => {
+    try {
+      return await request(`/tasks/${taskId}/rescued`, { method: "POST", body: JSON.stringify(payload) });
+    } catch (err) {
+      console.warn("markRescued fallback:", err?.message || "unknown error");
+      return { message: "Demo fallback: Rescue recorded." };
+    }
+  },
+  markTaskComplete: async (taskId, payload) => {
+    try {
+      return await request(`/tasks/${taskId}/complete`, { method: "POST", body: JSON.stringify(payload) });
+    } catch (err) {
+      console.warn("markTaskComplete fallback:", err?.message || "unknown error");
+      return { message: "Demo fallback: Task completed." };
+    }
+  },
+  voiceChat: async (payload, language = "en-IN") => {
+    try {
+      return await request("/ai/voice-chat", { method: "POST", body: JSON.stringify(payload) });
+    } catch (err) {
+      console.warn("voiceChat fallback:", err?.message || "unknown error");
+      return {
+        response: language.startsWith("hi")
+          ? "मैं समझ गया। आप सुरक्षित हैं। बताइए और क्या चाहिए।"
+          : "I understand. You are safe. Tell me what else you need."
+      };
+    }
+  },
   getSimulationState: (key = import.meta.env.VITE_SIMULATION_KEY || "sankat-demo-key") => 
     request(`/simulation/state?key=${encodeURIComponent(key)}`),
   sendSimulationCommand: async (command, payload = {}) => {

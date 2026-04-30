@@ -29,25 +29,29 @@ import bcrypt from "bcryptjs";
 const app = express();
 const httpServer = createServer(app);
 const allowedOrigins = [
-  process.env.CLIENT_URL,
-  process.env.SIM_CONTROL_URL
-].filter(Boolean);
-
-const localhostPattern = /^http:\/\/(localhost|127\.0\.0\.1):\d+$/;
-const defaultDevOrigins = ["http://localhost:5173", "http://localhost:5175", "http://localhost:5177"];
-const corsOrigins = allowedOrigins.length > 0 ? [...new Set([...allowedOrigins, ...defaultDevOrigins])] : defaultDevOrigins;
-
-const isAllowedOrigin = (origin) => {
-  if (!origin) return true;
-  if (corsOrigins.includes(origin)) return true;
-  return localhostPattern.test(origin);
-};
+  "http://localhost:5173",
+  "http://localhost:3000",
+  "https://sankatsahay-client.vercel.app",
+];
 
 const corsOptions = {
   origin(origin, callback) {
-    if (isAllowedOrigin(origin)) return callback(null, true);
-    return callback(new Error(`CORS blocked for origin: ${origin}`));
+    // Allow non-browser tools (no origin) like Postman/curl
+    if (!origin) return callback(null, true);
+
+    // Exact matches
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+
+    // Allow all Vercel preview domains
+    if (origin.endsWith(".vercel.app")) {
+      return callback(null, true);
+    }
+
+    return callback(new Error("CORS blocked: " + origin));
   },
+  credentials: true,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization", "x-sim-key"]
 };
@@ -85,10 +89,18 @@ try {
 app.set("io", io);
 app.use(helmet());
 app.use(cors(corsOptions));
+app.options("*", cors(corsOptions));
 app.use(express.json({ limit: "2mb" }));
 app.use(basicRateLimit());
 
 app.get("/health", (_req, res) => res.json({ ok: true, service: "sankatsahay-server" }));
+app.get("/api/debug/cors", (req, res) => {
+  res.json({
+    ok: true,
+    origin: req.headers.origin,
+    message: "CORS working",
+  });
+});
 
 app.use("/api/auth", authRoutes);
 app.use("/api/sos", sosRoutes);

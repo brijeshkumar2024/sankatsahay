@@ -14,7 +14,7 @@ export default function useSocket(token) {
     connectedTokenRef.current = tokenKey;
 
     const nextSocket = io(
-      import.meta.env.VITE_SOCKET_URL || "http://localhost:5000",
+      import.meta.env.VITE_SOCKET_URL || "https://sankatsahay.onrender.com",
       {
         auth: token ? { token } : undefined,
         // Start with polling so the handshake completes before upgrading.

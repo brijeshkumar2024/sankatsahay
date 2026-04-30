@@ -1,8 +1,7 @@
 /* eslint-disable react/prop-types */
 import { useCallback, useEffect, useRef, useState } from "react";
 import PanicReversal from "../ai/PanicReversal";
-
-const BASE_URL = import.meta.env.VITE_API_URL;
+import { api } from "../../services/api";
 
 // ── Geo helpers ───────────────────────────────────────────────────────────────
 function toRad(v) { return (v * Math.PI) / 180; }
@@ -166,24 +165,19 @@ export default function SoundNav({
   // ── Send to NVIDIA AI ──────────────────────────────────────────────────────
   const sendVoiceToAI = async (userText) => {
     try {
-      const res = await fetch(`${BASE_URL}/ai/voice-chat`, {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: [
-            {
-              role: "system",
-              content: `You are SankatBot guiding someone to ${targetName} emergency shelter during a disaster.
+      const data = await api.voiceChat({
+        messages: [
+          {
+            role: "system",
+            content: `You are SankatBot guiding someone to ${targetName} emergency shelter during a disaster.
 Distance remaining: ${formatDistance(distanceRef.current || 0)}.
 Direction: ${directionRef.current}.
 Be very brief — max 1-2 sentences. Respond in same language as user. Always end with encouragement.`,
-            },
-            { role: "user", content: userText },
-          ],
-          language: selectedLang,
-        }),
-      });
-      const data = await res.json();
+          },
+          { role: "user", content: userText },
+        ],
+        language: selectedLang,
+      }, selectedLang);
       speakAndListen(data.response, selectedLang);
     } catch {
       const fallback = selectedLang.startsWith("hi")

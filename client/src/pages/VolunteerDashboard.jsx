@@ -4,8 +4,7 @@ import { useNavigate } from "react-router-dom";
 import Card from "../components/ui/Card";
 import useSocket from "../hooks/useSocket";
 import useAppStore from "../store/useAppStore";
-
-const API = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+import { api } from "../services/api";
 
 const DEMO_TASKS = [
   { _id: "demo-1", type: "rescue", priority: "critical", title: "Rescue family trapped at Mahanadi riverbank", description: "Family of 4 stranded. Boat required.", location: { address: "Mahanadi Riverbank, Cuttack" }, requiredSkills: ["Boat Operation", "First Aid"], estimatedTime: "45 min", rewardCredits: 150, status: "open" },
@@ -55,12 +54,7 @@ function RescueModal({ task, volunteerId, onClose, onDone }) {
         ()  => r({ lat: 20.2961, lng: 85.8245 })
       )
     );
-    const res  = await fetch(`${API}/tasks/${task._id}/rescued`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ volunteerId, survivorCount: count, ...pos }),
-    });
-    const data = await res.json();
+    const data = await api.markRescued(task._id, { volunteerId, survivorCount: count, ...pos });
     setMsg(data.message || "Rescue recorded!");
     setLoading(false);
     setTimeout(() => { onDone(); onClose(); }, 2000);
@@ -119,12 +113,7 @@ function CompleteModal({ task, volunteerId, onClose, onDone }) {
         ()  => r({ lat: 20.2961, lng: 85.8245 })
       )
     );
-    const res  = await fetch(`${API}/tasks/${task._id}/complete`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ volunteerId, notes, ...pos }),
-    });
-    const data = await res.json();
+    const data = await api.markTaskComplete(task._id, { volunteerId, notes, ...pos });
     setMsg(data.message || "Task completed!");
     setLoading(false);
     setTimeout(() => { onDone(); onClose(); }, 2000);
@@ -190,19 +179,16 @@ export default function VolunteerDashboard() {
 
   const loadData = useCallback(async () => {
     try {
-      const [tasksRes, profileRes, myRes] = await Promise.all([
-        fetch(`${API}/tasks`),
-        volunteerId ? fetch(`${API}/tasks/profile/${volunteerId}`) : Promise.resolve(null),
-        volunteerId ? fetch(`${API}/tasks/my-tasks/${volunteerId}`) : Promise.resolve(null),
+      const [tasksData, profileData, myData] = await Promise.all([
+        api.getVolunteerTasks(),
+        volunteerId ? api.getVolunteerProfile(volunteerId) : Promise.resolve(null),
+        volunteerId ? api.getVolunteerMyTasks(volunteerId) : Promise.resolve(null),
       ]);
-      const tasksData = await tasksRes.json().catch(() => ({}));
       setOpenTasks(tasksData.tasks?.length ? tasksData.tasks : DEMO_TASKS);
-      if (profileRes) {
-        const profileData = await profileRes.json().catch(() => ({}));
+      if (profileData) {
         setProfile(profileData.volunteer || null);
       }
-      if (myRes) {
-        const myData = await myRes.json().catch(() => ({}));
+      if (myData) {
         setMyTasks(myData.tasks || []);
       }
     } catch {
@@ -229,17 +215,13 @@ export default function VolunteerDashboard() {
 
   const acceptTask = async (taskId) => {
     if (!volunteerId) return;
-    await fetch(`${API}/tasks/${taskId}/accept`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ volunteerId }),
-    });
+    await api.acceptVolunteerTask(taskId, volunteerId);
     showNotif("Task accepted!");
     loadData();
   };
 
   const startTask = async (taskId) => {
-    await fetch(`${API}/tasks/${taskId}/start`, { method: "POST", headers: { "Content-Type": "application/json" } });
+    await api.startVolunteerTask(taskId);
     loadData();
   };
 

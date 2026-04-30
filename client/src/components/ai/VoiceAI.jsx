@@ -1,6 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-
-const BASE_URL = import.meta.env.VITE_API_URL;
+import { api } from "../../services/api";
 
 const SYSTEM_PROMPT = `You are SankatBot, an emergency response AI assistant for disaster situations in India.
 Rules:
@@ -186,19 +185,7 @@ export default function VoiceAI({ onSOSTrigger, onPanicDetected }) {
     console.log("Messages count:", messages.length);
 
     try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 8000);
-
-      const res = await fetch(`${BASE_URL}/ai/voice-chat`, {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ messages, language: selectedLang, userMessage }),
-        signal:  controller.signal,
-      });
-      clearTimeout(timeout);
-
-      console.log("Response status:", res.status);
-      const data = await res.json();
+      const data = await api.voiceChat({ messages, language: selectedLang, userMessage }, selectedLang);
       console.log("AI response:", data.response);
 
       const aiText = data.response || (selectedLang.startsWith("hi") ? "मैं सुन रहा हूं। आप सुरक्षित हैं।" : "I hear you. You are safe.");
