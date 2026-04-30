@@ -1,0 +1,59 @@
+name: CI Build
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  build-client:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: sankatsahay/client/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ./sankatsahay/client
+        run: npm ci
+
+      - name: Build client
+        working-directory: ./sankatsahay/client
+        run: npm run build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: client-build
+          path: sankatsahay/client/dist
+          retention-days: 7
+
+  build-server:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: sankatsahay/server/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ./sankatsahay/server
+        run: npm ci
+
+      - name: Verify server syntax
+        working-directory: ./sankatsahay/server
+        run: node --check server.js
