@@ -1,11 +1,10 @@
 import express from "express";
-import { requireAuth } from "../middleware/auth.js";
 
 const router = express.Router();
 
-router.post("/ble-ping", requireAuth, async (req, res) => {
+router.post("/ble-ping", async (req, res) => {
   const payload = {
-    userId: req.user.id,
+    userId: req.body?.userId || "demo-user",
     count: req.body.count,
     distanceMeters: req.body.distanceMeters,
     coordinates: req.body.coordinates,
@@ -16,7 +15,7 @@ router.post("/ble-ping", requireAuth, async (req, res) => {
   res.status(202).json({ ok: true });
 });
 
-router.post("/motion-signal", requireAuth, async (req, res) => {
+router.post("/motion-signal", async (req, res) => {
   req.app.get("io").to("admin-room").emit("sensor:motion", req.body);
   res.status(202).json({ ok: true });
 });

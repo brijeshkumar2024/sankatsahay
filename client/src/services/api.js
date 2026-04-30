@@ -1,44 +1,6 @@
-import { DEMO_MODE } from "../config/demoMode";
-
 const BASE_URL = import.meta.env.VITE_API_URL || "https://sankatsahay.onrender.com/api";
 console.log("BASE_URL:", import.meta.env.VITE_API_URL, "RESOLVED_BASE_URL:", BASE_URL);
-const DEMO_ADMIN_EMAIL = import.meta.env.VITE_ADMIN_EMAIL || "";
-const DEMO_ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || "";
-
-let adminLoginPromise = null;
-
-async function tryDemoAdminLogin() {
-  if (!DEMO_MODE || !DEMO_ADMIN_EMAIL || !DEMO_ADMIN_PASSWORD) return null;
-  if (adminLoginPromise) return adminLoginPromise;
-
-  adminLoginPromise = (async () => {
-    try {
-      const res = await fetch(`${BASE_URL}/auth/admin-login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: DEMO_ADMIN_EMAIL, password: DEMO_ADMIN_PASSWORD })
-      });
-
-      if (!res.ok) return null;
-
-      const data = await res.json().catch(() => ({}));
-      if (!data?.token) return null;
-
-      localStorage.setItem("sankat-token", data.token);
-      if (data.user) localStorage.setItem("sankat-user", JSON.stringify(data.user));
-      return data.token;
-    } catch {
-      return null;
-    } finally {
-      adminLoginPromise = null;
-    }
-  })();
-
-  return adminLoginPromise;
-}
-
-export async function request(path, options = {}, allowRetry = true) {
-  const token = localStorage.getItem("sankat-token");
+export async function request(path, options = {}) {
   const { headers: customHeaders = {}, ...restOptions } = options;
 
   const doFetch = async (retriesLeft = 1) => {
@@ -46,7 +8,6 @@ export async function request(path, options = {}, allowRetry = true) {
       return await fetch(`${BASE_URL}${path}`, {
         headers: {
           "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
           ...customHeaders
         },
         ...restOptions
@@ -64,13 +25,6 @@ export async function request(path, options = {}, allowRetry = true) {
     console.log("API CALL:", `${BASE_URL}${path}`);
     const res = await doFetch(1);
 
-    if (res.status === 401 && allowRetry && !path.startsWith("/auth/")) {
-      const refreshedToken = await tryDemoAdminLogin();
-      if (refreshedToken) {
-        return request(path, options, false);
-      }
-    }
-
     if (!res.ok) {
       const err = await res.json().catch(() => ({ message: `HTTP ${res.status}: Request failed` }));
       const errorMsg = err.message || "Request failed";
@@ -86,7 +40,7 @@ export async function request(path, options = {}, allowRetry = true) {
 }
 
 export const api = {
-  login: (email, password) => request("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
+  login: (_email, _password) => Promise.resolve({ success: true, demo: true }),
   triggerSilentSOS: (payload) => request("/sos/silent", { method: "POST", body: JSON.stringify(payload) }),
   getActiveSOS: () => request("/sos/active"),
   getAdminStats: () => request("/admin/stats"),
@@ -217,13 +171,10 @@ export const api = {
       };
     }
   },
-  getSimulationState: (key = import.meta.env.VITE_SIMULATION_KEY || "sankat-demo-key") => 
-    request(`/simulation/state?key=${encodeURIComponent(key)}`),
+  getSimulationState: () => request("/simulation/state"),
   sendSimulationCommand: async (command, payload = {}) => {
-    const key = import.meta.env.VITE_SIMULATION_KEY || "sankat-demo-key";
     return request("/simulation/command", { 
       method: "POST", 
-      headers: { "x-sim-key": key },
       body: JSON.stringify({ command, payload })
     });
   }

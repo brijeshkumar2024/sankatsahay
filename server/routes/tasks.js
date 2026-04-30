@@ -1,7 +1,6 @@
 import express from "express";
 import Task from "../models/Task.js";
 import Volunteer from "../models/Volunteer.js";
-import { requireAuth } from "../middleware/auth.js";
 
 const router = express.Router();
 

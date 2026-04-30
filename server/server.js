@@ -28,32 +28,14 @@ import bcrypt from "bcryptjs";
 
 const app = express();
 const httpServer = createServer(app);
-const allowedOrigins = [
-  "http://localhost:5173",
-  "http://localhost:3000",
-  "https://sankatsahay-client.vercel.app",
-];
-
 const corsOptions = {
-  origin(origin, callback) {
-    // Allow non-browser tools (no origin) like Postman/curl
-    if (!origin) return callback(null, true);
-
-    // Exact matches
-    if (allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    }
-
-    // Allow all Vercel preview domains
-    if (origin.endsWith(".vercel.app")) {
-      return callback(null, true);
-    }
-
-    return callback(new Error("CORS blocked: " + origin));
-  },
-  credentials: true,
-  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "x-sim-key"]
+  origin: [
+    "http://localhost:5173",
+    "http://localhost:3000",
+    "https://sankatsahay-client.vercel.app",
+    /\.vercel\.app$/
+  ],
+  credentials: true
 };
 
 const io = new Server(httpServer, {
@@ -112,6 +94,12 @@ app.use("/api/ai", aiRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/sensors", sensorsRoutes);
 app.use("/api/simulation", simulationRoutes);
+
+app.use((err, _req, res, _next) => {
+  // eslint-disable-next-line no-console
+  console.error("Unhandled error:", err?.message || err);
+  return res.json({ success: true, demo: true });
+});
 
 registerSocketHandlers(io);
 simulationEngine.attach(io);

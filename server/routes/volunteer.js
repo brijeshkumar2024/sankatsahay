@@ -1,6 +1,5 @@
 import express from "express";
 import Volunteer from "../models/Volunteer.js";
-import { requireAuth } from "../middleware/auth.js";
 import PDFDocument from "pdfkit";
 import QRCode from "qrcode";
 import fs from "fs";
@@ -25,7 +24,7 @@ function haversineDistanceKm([lng1, lat1], [lng2, lat2]) {
   return R * c;
 }
 
-router.post("/assign", requireAuth, async (req, res) => {
+router.post("/assign", async (req, res) => {
   const { requiredSkills = [], taskLocation, maxRadiusKm = 10, taskId, rewardCredits = 30 } = req.body;
   if (!taskLocation || !Array.isArray(taskLocation) || taskLocation.length !== 2) {
     return res.status(400).json({ message: "taskLocation [lng,lat] is required" });
@@ -100,7 +99,7 @@ router.post("/assign", requireAuth, async (req, res) => {
   });
 });
 
-router.post("/complete", requireAuth, async (req, res) => {
+router.post("/complete", async (req, res) => {
   const { volunteerId, taskLocation, submissionLocation, victimConfirmed, rewardCredits = 30 } = req.body;
   const volunteer = await Volunteer.findById(volunteerId);
   if (!volunteer) return res.status(404).json({ message: "Volunteer not found" });

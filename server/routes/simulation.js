@@ -3,25 +3,11 @@ import { simulationEngine } from "../services/simulationEngine.js";
 
 const router = express.Router();
 
-function hasSimulationAccess(req) {
-  const expected = process.env.SIMULATION_KEY || "sankat-demo-key";
-  const headerKey = req.headers["x-sim-key"];
-  const queryKey = req.query.key;
-  return headerKey === expected || queryKey === expected;
-}
-
 router.get("/state", (req, res) => {
-  if (!hasSimulationAccess(req)) {
-    return res.status(403).json({ message: "Forbidden" });
-  }
   return res.json(simulationEngine.snapshot());
 });
 
 router.post("/command", (req, res) => {
-  if (!hasSimulationAccess(req)) {
-    return res.status(403).json({ message: "Forbidden" });
-  }
-
   const { command, payload } = req.body || {};
   if (!command) {
     return res.status(400).json({ message: "Command is required" });

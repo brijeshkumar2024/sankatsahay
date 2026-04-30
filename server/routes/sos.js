@@ -1,15 +1,14 @@
 import express from "express";
 import SOSAlert from "../models/SOSAlert.js";
-import { requireAuth } from "../middleware/auth.js";
 import { offlineQueueAware } from "../middleware/offlineQueue.js";
 
 const router = express.Router();
 
-router.post("/silent", requireAuth, offlineQueueAware, async (req, res) => {
+router.post("/silent", offlineQueueAware, async (req, res) => {
   const { coordinates, mode = "tap", disasterType = "Flood", message = "Silent distress" } = req.body;
 
   const alert = await SOSAlert.create({
-    userId: req.user.id,
+    userId: req.body?.userId || "demo-user",
     mode,
     message,
     disasterType,
@@ -33,7 +32,7 @@ router.post("/silent", requireAuth, offlineQueueAware, async (req, res) => {
   });
 });
 
-router.get("/active", requireAuth, async (_req, res) => {
+router.get("/active", async (_req, res) => {
   const alerts = await SOSAlert.find({ status: "active" }).sort({ createdAt: -1 }).limit(100);
   return res.json(alerts);
 });

@@ -3,21 +3,20 @@ import DisasterZone from "../models/DisasterZone.js";
 import FoodParcel from "../models/FoodParcel.js";
 import Shelter from "../models/Shelter.js";
 import SensorPing from "../models/SensorPing.js";
-import { requireAuth } from "../middleware/auth.js";
 
 const router = express.Router();
 
-router.get("/zones", requireAuth, async (_req, res) => {
+router.get("/zones", async (_req, res) => {
   const zones = await DisasterZone.find().sort({ updatedAt: -1 });
   res.json(zones);
 });
 
-router.get("/food-parcels", requireAuth, async (_req, res) => {
+router.get("/food-parcels", async (_req, res) => {
   const parcels = await FoodParcel.find().sort({ updatedAt: -1 }).limit(200);
   res.json(parcels);
 });
 
-router.get("/shelters", requireAuth, async (_req, res) => {
+router.get("/shelters", async (_req, res) => {
   const shelters = await Shelter.find().sort({ updatedAt: -1 }).limit(200);
   res.json(shelters);
 });
@@ -67,7 +66,7 @@ router.get("/shelters/nearby", async (req, res) => {
   }
 });
 
-router.get("/sensor-pings", requireAuth, async (_req, res) => {
+router.get("/sensor-pings", async (_req, res) => {
   const pings = await SensorPing.find().sort({ createdAt: -1 }).limit(200);
   res.json(pings);
 });

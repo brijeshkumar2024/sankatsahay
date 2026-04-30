@@ -6,7 +6,6 @@ import DisasterZone from "../models/DisasterZone.js";
 import Shelter from "../models/Shelter.js";
 import SensorPing from "../models/SensorPing.js";
 import Task from "../models/Task.js";
-import { requireAuth, requireRole } from "../middleware/auth.js";
 import { getRecentAIDecisions, logAIDecision } from "../services/aiDecisionService.js";
 import { simulationEngine } from "../services/simulationEngine.js";
 import { explainDecision } from "../services/geminiService.js";
@@ -14,7 +13,7 @@ import { explainDecision } from "../services/geminiService.js";
 const router = express.Router();
 
 // ── Stats ────────────────────────────────────────────────────────────────────
-router.get("/stats", requireAuth, requireRole("admin"), async (_req, res) => {
+router.get("/stats", async (_req, res) => {
   const [activeSOS, deployedVolunteers, familiesReunited, resourcesPredicted, totalVolunteers, totalShelters, totalTasks] = await Promise.all([
     SOSAlert.countDocuments({ status: "active" }),
     Volunteer.countDocuments({ availability: { $in: [false, "assigned", "busy"] } }),
@@ -29,7 +28,7 @@ router.get("/stats", requireAuth, requireRole("admin"), async (_req, res) => {
 });
 
 // ── Dashboard Master Data ────────────────────────────────────────────────────
-router.get("/dashboard-data", requireAuth, requireRole("admin"), async (_req, res) => {
+router.get("/dashboard-data", async (_req, res) => {
   const [alerts, volunteers, zones, shelters, sensors, users, tasks] = await Promise.all([
     SOSAlert.find().sort({ createdAt: -1 }).limit(200),
     Volunteer.find().populate("userId"),
@@ -43,7 +42,7 @@ router.get("/dashboard-data", requireAuth, requireRole("admin"), async (_req, re
 });
 
 // ── AI Decisions ─────────────────────────────────────────────────────────────
-router.get("/ai-decisions", requireAuth, async (req, res) => {
+router.get("/ai-decisions", async (req, res) => {
   const limit = Number(req.query.limit || 20);
   const decisions = await getRecentAIDecisions(limit);
   res.json(
@@ -57,7 +56,7 @@ router.get("/ai-decisions", requireAuth, async (req, res) => {
   );
 });
 
-router.post("/ai-decisions/explain", requireAuth, requireRole("admin"), async (req, res) => {
+router.post("/ai-decisions/explain", async (req, res) => {
   const { decisionType, data } = req.body;
   const explanation = await explainDecision(decisionType || "general", data || {});
   await logAIDecision({ decisionType: decisionType || "other", confidence: data?.confidence || 70, explanation, payload: data });
@@ -65,12 +64,12 @@ router.post("/ai-decisions/explain", requireAuth, requireRole("admin"), async (r
 });
 
 // ── SOS Management ───────────────────────────────────────────────────────────
-router.get("/sos", requireAuth, requireRole("admin"), async (_req, res) => {
+router.get("/sos", async (_req, res) => {
   const alerts = await SOSAlert.find().sort({ createdAt: -1 }).limit(500);
   res.json(alerts);
 });
 
-router.patch("/sos/:id/priority", requireAuth, requireRole("admin"), async (req, res) => {
+router.patch("/sos/:id/priority", async (req, res) => {
   const { priority } = req.body;
   const alert = await SOSAlert.findByIdAndUpdate(
     req.params.id,
@@ -82,7 +81,7 @@ router.patch("/sos/:id/priority", requireAuth, requireRole("admin"), async (req,
   res.json(alert);
 });
 
-router.patch("/sos/:id/status", requireAuth, requireRole("admin"), async (req, res) => {
+router.patch("/sos/:id/status", async (req, res) => {
   const { status } = req.body;
   const alert = await SOSAlert.findByIdAndUpdate(
     req.params.id,
@@ -94,7 +93,7 @@ router.patch("/sos/:id/status", requireAuth, requireRole("admin"), async (req, r
   res.json(alert);
 });
 
-router.delete("/sos/:id", requireAuth, requireRole("admin"), async (req, res) => {
+router.delete("/sos/:id", async (req, res) => {
   const alert = await SOSAlert.findByIdAndDelete(req.params.id);
   if (!alert) return res.status(404).json({ message: "SOS alert not found" });
   req.app.get("io")?.to("admin-room").emit("sos:deleted", { id: req.params.id });
@@ -102,12 +101,12 @@ router.delete("/sos/:id", requireAuth, requireRole("admin"), async (req, res) =>
 });
 
 // ── Volunteer Management ─────────────────────────────────────────────────────
-router.get("/volunteers", requireAuth, requireRole("admin"), async (_req, res) => {
+router.get("/volunteers", async (_req, res) => {
   const volunteers = await Volunteer.find().populate("userId").sort({ createdAt: -1 }).limit(500);
   res.json(volunteers);
 });
 
-router.patch("/volunteers/:id/assign", requireAuth, requireRole("admin"), async (req, res) => {
+router.patch("/volunteers/:id/assign", async (req, res) => {
   const { taskId } = req.body;
   const volunteer = await Volunteer.findByIdAndUpdate(
     req.params.id,
@@ -119,7 +118,7 @@ router.patch("/volunteers/:id/assign", requireAuth, requireRole("admin"), async 
   res.json(volunteer);
 });
 
-router.patch("/volunteers/:id/reassign", requireAuth, requireRole("admin"), async (req, res) => {
+router.patch("/volunteers/:id/reassign", async (req, res) => {
   const volunteer = await Volunteer.findByIdAndUpdate(
     req.params.id,
     { availability: "available", currentTask: null, updatedAt: new Date() },
@@ -130,7 +129,7 @@ router.patch("/volunteers/:id/reassign", requireAuth, requireRole("admin"), asyn
   res.json(volunteer);
 });
 
-router.patch("/volunteers/:id/status", requireAuth, requireRole("admin"), async (req, res) => {
+router.patch("/volunteers/:id/status", async (req, res) => {
   const { status } = req.body;
   const volunteer = await Volunteer.findByIdAndUpdate(
     req.params.id,
@@ -143,7 +142,7 @@ router.patch("/volunteers/:id/status", requireAuth, requireRole("admin"), async 
 });
 
 // ── Cyclone / Simulation State ───────────────────────────────────────────────
-router.get("/cyclone/state", requireAuth, requireRole("admin"), async (_req, res) => {
+router.get("/cyclone/state", async (_req, res) => {
   const state = simulationEngine.snapshot();
   const zones = state.zones || [];
   res.json({
@@ -160,7 +159,7 @@ router.get("/cyclone/state", requireAuth, requireRole("admin"), async (_req, res
   });
 });
 
-router.post("/cyclone/trigger-alert", requireAuth, requireRole("admin"), async (req, res) => {
+router.post("/cyclone/trigger-alert", async (req, res) => {
   const { message, severity = "CRITICAL", zoneId } = req.body;
   simulationEngine.state.broadcast = message || "Admin triggered cyclone alert.";
   simulationEngine.state.severity = severity;
@@ -171,7 +170,7 @@ router.post("/cyclone/trigger-alert", requireAuth, requireRole("admin"), async (
 });
 
 // ── Analytics / Heatmap ──────────────────────────────────────────────────────
-router.get("/analytics/heatmap", requireAuth, requireRole("admin"), async (_req, res) => {
+router.get("/analytics/heatmap", async (_req, res) => {
   const sosAlerts = await SOSAlert.find({ status: "active" }).select("location.coordinates disasterType createdAt").limit(1000);
   const incidents = sosAlerts.map((a) => ({
     type: a.disasterType || "Unknown",
@@ -187,7 +186,7 @@ router.get("/analytics/heatmap", requireAuth, requireRole("admin"), async (_req,
   res.json({ incidents, hourlyAggregation: hourly, total: incidents.length });
 });
 
-router.get("/analytics/resource-demand", requireAuth, requireRole("admin"), async (_req, res) => {
+router.get("/analytics/resource-demand", async (_req, res) => {
   const zones = await DisasterZone.find().sort({ updatedAt: -1 }).limit(50);
   const predictions = zones.map((z) => ({
     zone: z.name,
