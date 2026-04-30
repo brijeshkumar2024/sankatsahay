@@ -2,6 +2,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import PanicReversal from "../ai/PanicReversal";
 
+const BASE_URL = import.meta.env.VITE_API_URL;
+
 // ── Geo helpers ───────────────────────────────────────────────────────────────
 function toRad(v) { return (v * Math.PI) / 180; }
 
@@ -164,7 +166,7 @@ export default function SoundNav({
   // ── Send to NVIDIA AI ──────────────────────────────────────────────────────
   const sendVoiceToAI = async (userText) => {
     try {
-      const res = await fetch("/api/ai/voice-chat", {
+      const res = await fetch(`${BASE_URL}/ai/voice-chat`, {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

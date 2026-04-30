@@ -1,6 +1,6 @@
 import { DEMO_MODE } from "../config/demoMode";
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+const BASE_URL = import.meta.env.VITE_API_URL;
 const DEMO_ADMIN_EMAIL = import.meta.env.VITE_ADMIN_EMAIL || "";
 const DEMO_ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || "";
 
@@ -12,7 +12,7 @@ async function tryDemoAdminLogin() {
 
   adminLoginPromise = (async () => {
     try {
-      const res = await fetch(`${API_BASE}/auth/admin-login`, {
+      const res = await fetch(`${BASE_URL}/auth/admin-login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: DEMO_ADMIN_EMAIL, password: DEMO_ADMIN_PASSWORD })
@@ -41,7 +41,7 @@ export async function request(path, options = {}, allowRetry = true) {
   const { headers: customHeaders = {}, ...restOptions } = options;
 
   try {
-    const res = await fetch(`${API_BASE}${path}`, {
+    const res = await fetch(`${BASE_URL}${path}`, {
       headers: {
         "Content-Type": "application/json",
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
