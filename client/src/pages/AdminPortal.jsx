@@ -16,6 +16,7 @@ import CycloneMonitor from "../components/admin/CycloneMonitor";
 import AIDecisionPanel from "../components/admin/AIDecisionPanel";
 import AnalyticsPanel from "../components/admin/AnalyticsPanel";
 import useDemoStore from "../store/useDemoStore";
+import { DEMO_MODE } from "../config/demoMode";
 
 const FALLBACK_STATS = { activeSOS: 8, deployedVolunteers: 5, familiesReunited: 3, resourcesPredicted: 2 };
 const FALLBACK_ALERTS = [
@@ -85,6 +86,14 @@ export default function AdminPortal() {
   const activeAnimation = useDemoStore((s) => s.activeAnimation);
   const bannerMessage = useDemoStore((s) => s.bannerMessage);
   const [simulationRunning, setSimulationRunning] = useState(true);
+  const [buttonLoading, setButtonLoading] = useState({});
+  const [toasts, setToasts] = useState([]);
+
+  const showToast = (message, type = 'success') => {
+    const id = Date.now();
+    setToasts(prev => [...prev, { id, message, type }]);
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4000);
+  };
 
   const load = async () => {
     setLoading(true);
@@ -165,37 +174,93 @@ export default function AdminPortal() {
   }, [data.alerts]);
 
   const suggestRoute = async () => {
-    const zone = data.zones?.[0];
-    const res = await api.aiTrafficRoute(
-      zone?.polygon || [[85.79, 20.27], [85.87, 20.33]],
-      zone?.disasterType || "Flood"
-    );
-    setRouteSuggestions(res.routes || []);
+    const key = 'suggestRoute';
+    setButtonLoading(prev => ({...prev, [key]: true}));
+    try {
+      const zone = data.zones?.[0];
+      const res = await api.aiTrafficRoute(
+        zone?.polygon || [[85.79, 20.27], [85.87, 20.33]],
+        zone?.disasterType || "Flood"
+      );
+      setRouteSuggestions(res.routes || [{name: 'Demo Route', etaMinutes: 12, distanceKm: 8.2}]);
+      showToast('📍 Route suggestions generated', 'success');
+    } catch (err) {
+      setRouteSuggestions([{name: 'Fallback Route (Safe)', etaMinutes: 15, distanceKm: 10}]);
+      showToast('Route calculated (demo mode)', 'success');
+    } finally {
+      setButtonLoading(prev => ({...prev, [key]: false}));
+    }
   };
 
   const triggerEmergency = async () => {
-    setSimulationRunning(true);
-    await api.triggerCycloneAlert({ message: "Hackathon emergency mode activated", severity: "CRITICAL", zoneId: data.zones?.[0]?._id });
+    const key = 'emergency';
+    setButtonLoading(prev => ({...prev, [key]: true}));
+    try {
+      setSimulationRunning(true);
+      await api.triggerCycloneAlert({ message: "Hackathon emergency mode activated", severity: "CRITICAL", zoneId: data.zones?.[0]?._id });
+      showToast('🚨 Emergency triggered successfully', 'success');
+    } catch (err) {
+      showToast('Emergency trigger failed: ' + err.message, 'error');
+    } finally {
+      setButtonLoading(prev => ({...prev, [key]: false}));
+    }
   };
 
   const autoAssignVolunteers = async () => {
-    const availableVolunteer = data.volunteers?.find((v) => v.availability === "available") || data.volunteers?.[0];
-    const activeTask = data.tasks?.find((task) => task.status === "open") || { _id: "demo-task-1" };
-    if (availableVolunteer) {
-      await api.assignVolunteerTaskByAdmin(availableVolunteer._id, activeTask._id);
-      await load();
+    const key = 'autoAssign';
+    setButtonLoading(prev => ({...prev, [key]: true}));
+    try {
+      const availableVolunteer = data.volunteers?.find((v) => v.availability === "available") || data.volunteers?.[0];
+      const activeTask = data.tasks?.find((task) => task.status === "open") || { _id: "demo-task-1" };
+      if (availableVolunteer) {
+        await api.assignVolunteerTaskByAdmin(availableVolunteer._id, activeTask._id);
+        await load();
+        showToast('👥 Volunteers auto-assigned successfully', 'success');
+      } else {
+        showToast('No available volunteers found', 'warn');
+      }
+    } catch (err) {
+      if (DEMO_MODE && /unauthorized/i.test(err?.message || "")) {
+        const availableVolunteer = data.volunteers?.find((v) => v.availability === "available") || data.volunteers?.[0];
+        if (availableVolunteer) {
+          setData((prev) => ({
+            ...prev,
+            volunteers: (prev.volunteers || []).map((v) =>
+              String(v._id) === String(availableVolunteer._id) ? { ...v, availability: "assigned" } : v
+            )
+          }));
+          setStats((prev) => ({
+            ...prev,
+            deployedVolunteers: Number(prev.deployedVolunteers || 0) + 1
+          }));
+          showToast('👥 Auto-assigned in demo mode (auth fallback)', 'success');
+          return;
+        }
+      }
+      showToast('Auto-assign failed: ' + err.message, 'error');
+    } finally {
+      setButtonLoading(prev => ({...prev, [key]: false}));
     }
   };
 
   const simulateDisaster = async () => {
-    setSimulationRunning(true);
-    await api.sendSimulationCommand("simulate:cyclone", { intensity: 82, sosFrequency: 14 });
+    const key = 'simulate';
+    setButtonLoading(prev => ({...prev, [key]: true}));
+    try {
+      setSimulationRunning(true);
+      await api.sendSimulationCommand("simulate:cyclone", { intensity: 82, sosFrequency: 14 });
+      showToast('⚡ Disaster simulation started', 'success');
+    } catch (err) {
+      showToast('Simulation failed: ' + err.message, 'error');
+    } finally {
+      setButtonLoading(prev => ({...prev, [key]: false}));
+    }
   };
 
   return (
     <motion.main initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.25 }} className="mx-auto max-w-7xl p-4">
       <div className="grid gap-4 lg:grid-cols-[240px_1fr]">
-        <AdminSidebar tabs={tabs} activeTab={activeTab} onChange={setActiveTab} onLogout={logout} />
+<AdminSidebar tabs={tabs} activeTab={activeTab} onChange={setActiveTab} onLogout={logout} buttonLoading={buttonLoading} onTriggerEmergency={triggerEmergency} onStartSimulation={simulateDisaster} onAutoAssign={autoAssignVolunteers} />
 
         <section className="space-y-4">
           <Card>
@@ -206,9 +271,30 @@ export default function AdminPortal() {
                 <p className="mt-1 text-sm text-muted">{bannerMessage}</p>
               </div>
               <div className="flex flex-wrap gap-2">
-                <Button className="h-9 min-w-0 px-3 text-xs" variant="danger" onClick={triggerEmergency}>Trigger Emergency</Button>
-                <Button className="h-9 min-w-0 px-3 text-xs" variant="ghost" onClick={autoAssignVolunteers}>Auto Assign Volunteers</Button>
-                <Button className="h-9 min-w-0 px-3 text-xs" variant="ghost" onClick={simulateDisaster}>Simulate Disaster</Button>
+                <Button 
+                  className="h-9 min-w-0 px-3 text-xs" 
+                  variant="danger" 
+                  onClick={triggerEmergency}
+                  disabled={buttonLoading.emergency}
+                >
+                  {buttonLoading.emergency ? 'Triggering...' : 'Trigger Emergency'}
+                </Button>
+                <Button 
+                  className="h-9 min-w-0 px-3 text-xs" 
+                  variant="ghost" 
+                  onClick={autoAssignVolunteers}
+                  disabled={buttonLoading.autoAssign}
+                >
+                  {buttonLoading.autoAssign ? 'Assigning...' : 'Auto Assign Volunteers'}
+                </Button>
+                <Button 
+                  className="h-9 min-w-0 px-3 text-xs" 
+                  variant="ghost" 
+                  onClick={simulateDisaster}
+                  disabled={buttonLoading.simulate}
+                >
+                  {buttonLoading.simulate ? 'Simulating...' : 'Simulate Disaster'}
+                </Button>
                 <Button className="h-9 min-w-0 px-3 text-xs" variant="ghost" onClick={load}>Refresh All</Button>
               </div>
             </div>
@@ -284,9 +370,14 @@ export default function AdminPortal() {
                 <div className="space-y-4">
                   <Card>
                     <p className="font-mono text-xs uppercase tracking-widest text-muted">Emergency Route Suggestion</p>
-                    <Button className="mt-3 h-9 min-w-0 w-full text-xs" variant="ghost" onClick={suggestRoute}>
-                      Suggest Route
-                    </Button>
+                <Button 
+                  className="mt-3 h-9 min-w-0 w-full text-xs" 
+                  variant="ghost" 
+                  onClick={suggestRoute}
+                  disabled={buttonLoading.suggestRoute}
+                >
+                  {buttonLoading.suggestRoute ? 'Calculating...' : 'Suggest Route'}
+                </Button>
                     <div className="mt-3 space-y-2 text-sm">
                       {routeSuggestions.length === 0 && <p className="text-muted">No route suggested yet.</p>}
                       {routeSuggestions.map((r, idx) => (
@@ -311,6 +402,18 @@ export default function AdminPortal() {
           {activeTab === "analytics" && <AnalyticsPanel />}
         </section>
       </div>
+      {toasts.map((toast) => (
+        <div
+          key={toast.id}
+          className={`fixed top-4 right-4 z-50 rounded-lg p-4 shadow-xl transition-all ${
+            toast.type === 'success' ? 'border-green-500/60 bg-green-500/10 text-green-200' :
+            toast.type === 'error' ? 'border-red-500/60 bg-red-500/10 text-red-200' :
+            'border-yellow-500/60 bg-yellow-500/10 text-yellow-200'
+          }`}
+        >
+          {toast.message}
+        </div>
+      ))}
     </motion.main>
   );
 }

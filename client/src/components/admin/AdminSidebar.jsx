@@ -1,4 +1,4 @@
-export default function AdminSidebar({ tabs, activeTab, onChange, onLogout, onTriggerEmergency, onStartSimulation, onAutoAssign }) {
+export default function AdminSidebar({ tabs, activeTab, onChange, onLogout, onTriggerEmergency, onStartSimulation, onAutoAssign, buttonLoading = {} }) {
   return (
     <aside className="glass rounded-2xl p-4 space-y-4">
       <div>
@@ -27,23 +27,32 @@ export default function AdminSidebar({ tabs, activeTab, onChange, onLogout, onTr
           <button
             type="button"
             onClick={onTriggerEmergency}
-            className="w-full rounded-lg border border-red-500/60 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-400 transition hover:bg-red-500/20 animate-pulse"
+            disabled={buttonLoading.emergency}
+            className={`w-full rounded-lg border border-red-500/60 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-400 transition hover:bg-red-500/20 animate-pulse ${
+              buttonLoading.emergency ? 'opacity-50 cursor-not-allowed' : ''
+            }`}
           >
-            🚨 Trigger Emergency
+            {buttonLoading.emergency ? '🚨 Triggering...' : '🚨 Trigger Emergency'}
           </button>
           <button
             type="button"
             onClick={onStartSimulation}
-            className="w-full rounded-lg border border-orange-500/60 bg-orange-500/10 px-3 py-2 text-xs font-semibold text-orange-400 transition hover:bg-orange-500/20"
+            disabled={buttonLoading.simulate}
+            className={`w-full rounded-lg border border-orange-500/60 bg-orange-500/10 px-3 py-2 text-xs font-semibold text-orange-400 transition hover:bg-orange-500/20 ${
+              buttonLoading.simulate ? 'opacity-50 cursor-not-allowed' : ''
+            }`}
           >
-            ⚡ Start Simulation
+            {buttonLoading.simulate ? '⚡ Starting...' : '⚡ Start Simulation'}
           </button>
           <button
             type="button"
             onClick={onAutoAssign}
-            className="w-full rounded-lg border border-blue-500/60 bg-blue-500/10 px-3 py-2 text-xs font-semibold text-blue-400 transition hover:bg-blue-500/20"
+            disabled={buttonLoading.autoAssign}
+            className={`w-full rounded-lg border border-blue-500/60 bg-blue-500/10 px-3 py-2 text-xs font-semibold text-blue-400 transition hover:bg-blue-500/20 ${
+              buttonLoading.autoAssign ? 'opacity-50 cursor-not-allowed' : ''
+            }`}
           >
-            👥 Auto Assign
+            {buttonLoading.autoAssign ? '👥 Assigning...' : '👥 Auto Assign'}
           </button>
         </div>
       </div>

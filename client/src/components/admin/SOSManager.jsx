@@ -3,11 +3,6 @@ import Card from "../ui/Card";
 import Button from "../ui/Button";
 import { api } from "../../services/api";
 
-import { useEffect, useState } from "react";
-import Card from "../ui/Card";
-import Button from "../ui/Button";
-import { api } from "../../services/api.js";
-
 export default function SOSManager() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -33,7 +28,10 @@ export default function SOSManager() {
   const updateStatus = async (id, status) => {
     try {
       await api.updateSOSStatus(id, status);
-      setItems((prev) => prev.map((item) => (item._id === id ? { ...item, status } : item)));
+      setItems((prev) => prev.map((item) => {
+        if (item._id === id) return { ...item, status };
+        return item;
+      }));
     } catch (err) {
       setError("Update failed: " + err.message);
     }
@@ -42,7 +40,10 @@ export default function SOSManager() {
   const updatePriority = async (id, priority) => {
     try {
       await api.updateSOSPriority(id, priority);
-      setItems((prev) => prev.map((item) => (item._id === id ? { ...item, priority } : item)));
+      setItems((prev) => prev.map((item) => {
+        if (item._id === id) return { ...item, priority };
+        return item;
+      }));
     } catch (err) {
       setError("Priority update failed: " + err.message);
     }
@@ -104,61 +105,49 @@ export default function SOSManager() {
             <p className="mt-2 text-xs text-muted-foreground">Use "Trigger Test SOS" to simulate</p>
           </div>
         )}
-        {items.slice(0, 120).map((item) => (
-          <div key={item._id} className="rounded-xl border border-border bg-gradient-to-r from-muted/50 to-white/10 p-4 shadow-sm hover:shadow-md transition-all">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-1">
-                  <div className={`w-3 h-3 rounded-full ${
-                    item.priority === 'critical' ? 'bg-red-500' : 
-                    item.priority === 'high' ? 'bg-orange-500' : 'bg-yellow-500'
-                  } animate-pulse`}></div>
-                  <p className="font-semibold text-lg text-text">{item.disasterType || "Incident"}</p>
-                </div>
-                <p className="text-xs text-muted">Mode: <span className="font-mono">{item.mode || "manual"}</span></p>
-                <p className="text-xs text-muted">Priority: <span className="font-semibold uppercase">{item.priority || "high"}</span></p>
-                <p className="text-xs text-muted">
-                  Status: <span className={`px-2 py-1 rounded-full text-xs font-bold ${
-                    item.status === 'resolved' ? 'bg-green-500/20 text-green-400' :
-                    item.status === 'responding' ? 'bg-blue-500/20 text-blue-400' :
-                    'bg-red-500/20 text-red-400'
-                  }`}>
-                    {item.status || 'active'}
-                  </span> · {new Date(item.createdAt).toLocaleString()}
-                </p>
-              </div>
+        {items.slice(0, 120).map((item) => {
+          let priorityClass = "bg-yellow-500";
+          if (item.priority === "critical") priorityClass = "bg-red-500";
+          else if (item.priority === "high") priorityClass = "bg-orange-500";
 
-              <div className="flex flex-nowrap gap-1">
-                <Button 
-                  className="h-8 min-w-0 px-2 text-xs" 
-                  variant="ghost" 
-                  onClick={() => updatePriority(item._id, "critical")}
-                >
-                  Critical
-                </Button>
-                <Button 
-                  className="h-8 min-w-0 px-2 text-xs" 
-                  variant="ghost" 
-                  onClick={() => updatePriority(item._id, "high")}
-                >
-                  High
-                </Button>
-                <Button 
-                  className="h-8 min-w-0 px-2 text-xs bg-blue-600 hover:bg-blue-700" 
-                  onClick={() => updateStatus(item._id, "responding")}
-                >
-                  Respond
-                </Button>
-                <Button 
-                  className="h-8 min-w-0 px-2 text-xs bg-green-600 hover:bg-green-700" 
-                  onClick={() => updateStatus(item._id, "resolved")}
-                >
-                  Resolve
-                </Button>
+          let statusClass = "bg-red-500/20 text-red-400";
+          if (item.status === "resolved") statusClass = "bg-green-500/20 text-green-400";
+          else if (item.status === "responding") statusClass = "bg-blue-500/20 text-blue-400";
+
+          return (
+            <div key={item._id} className="rounded-xl border border-border bg-gradient-to-r from-muted/50 to-white/10 p-4 shadow-sm hover:shadow-md transition-all">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <div className={`w-3 h-3 rounded-full ${priorityClass} animate-pulse`} />
+                    <p className="font-semibold text-lg text-text">{item.disasterType || "Incident"}</p>
+                  </div>
+                  <p className="text-xs text-muted">Mode: <span className="font-mono">{item.mode || "manual"}</span></p>
+                  <p className="text-xs text-muted">Priority: <span className="font-semibold uppercase">{item.priority || "high"}</span></p>
+                  <p className="text-xs text-muted">
+                    Status: <span className={`px-2 py-1 rounded-full text-xs font-bold ${statusClass}`}>{item.status || "active"}</span> · {new Date(item.createdAt).toLocaleString()}
+                  </p>
+                </div>
+
+                <div className="flex flex-nowrap gap-1">
+                  <Button className="h-8 min-w-0 px-2 text-xs" variant="ghost" onClick={() => updatePriority(item._id, "critical")}>
+                    Critical
+                  </Button>
+                  <Button className="h-8 min-w-0 px-2 text-xs" variant="ghost" onClick={() => updatePriority(item._id, "high")}>
+                    High
+                  </Button>
+                  <Button className="h-8 min-w-0 px-2 text-xs bg-blue-600 hover:bg-blue-700" onClick={() => updateStatus(item._id, "responding")}>
+                    Respond
+                  </Button>
+                  <Button className="h-8 min-w-0 px-2 text-xs bg-green-600 hover:bg-green-700" onClick={() => updateStatus(item._id, "resolved")}
+                  >
+                    Resolve
+                  </Button>
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </Card>
   );

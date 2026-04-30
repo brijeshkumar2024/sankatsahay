@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import Card from "../../ui/Card.jsx";
 import Button from "../../ui/Button.jsx";
 import { api } from "../../../services/api.js";
-import useDemoStore from "../../../store/useDemoStore.js";
+import useDemoStore from "../../store/useDemoStore";
 
 export default function FaceMatch() {
   const [matches, setMatches] = useState([]);

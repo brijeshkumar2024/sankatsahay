@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import Card from "../ui/Card";
 import Button from "../ui/Button";
 import { api } from "../../services/api";
-import useDemoStore from "../../../store/useDemoStore.js";
+import useDemoStore from "../../store/useDemoStore";
 
 const FALLBACK_DECISIONS = [
   {
@@ -48,14 +48,14 @@ export default function AIDecisionPanel() {
     setError("");
     try {
       const data = await api.getAIDecisions();
-const safeData = Array.isArray(data) && data.length > 0 ? data : FALLBACK_DECISIONS;
+      const safeData = Array.isArray(data) && data.length > 0 ? data : FALLBACK_DECISIONS;
       setDecisions(safeData);
     } catch (err) {
       console.warn("AI decisions API failed, using demo fallback:", err);
       setDecisions(FALLBACK_DECISIONS);
     } finally {
       setLoading(false);
-    }0+
+    }
   };
 
   useEffect(() => {
@@ -65,7 +65,7 @@ const safeData = Array.isArray(data) && data.length > 0 ? data : FALLBACK_DECISI
   const explain = async () => {
     try {
       const latest = decisions[0] || FALLBACK_DECISIONS[0];
-    const data = await api.explainAdminDecision(latest.decisionType, latest);
+      const data = await api.explainAdminDecision(latest.decisionType, latest);
       setExplanation(data.explanation || STEP_EXPLANATIONS[demoPhase] || "AI analysis complete — optimal response deployed.");
     } catch (err) {
       setExplanation(
@@ -85,19 +85,6 @@ const safeData = Array.isArray(data) && data.length > 0 ? data : FALLBACK_DECISI
           className="h-9 min-w-0 px-3 text-xs"
           variant="ghost"
           onClick={load}
-          <p className="text-sm text-muted">No decisions — simulation ready.</p>
-        )}
-      </div>
-
-      <Button className="mt-3 h-9 min-w-0 px-3 text-xs" variant="ghost" onClick={explain}>Explain Latest Decision</Button>
-      {explanation && (
-        <div className="mt-3 rounded-lg border border-border/50 bg-gradient-to-r from-safe/10 to-safe/5 p-3">
-          <p className="text-sm text-text">{explanation}</p>
-        </div>
-      )}
-    </Card>
-  );
-}
         >
           Refresh
         </Button>
@@ -121,7 +108,7 @@ const safeData = Array.isArray(data) && data.length > 0 ? data : FALLBACK_DECISI
           >
             <div className="flex items-center justify-between">
               <span className="text-sm font-semibold uppercase text-primary">
-                {d.decisionType.replace("_", " ")}
+                {d.decisionType.replace(/_/g, " ")}
               </span>
               <span className="text-xs text-green-400">
                 {d.confidence}% confidence
@@ -132,24 +119,22 @@ const safeData = Array.isArray(data) && data.length > 0 ? data : FALLBACK_DECISI
               {new Date(d.timestamp).toLocaleTimeString()}
             </p>
 
-            <p className="mt-2 text-sm text-gray-200">
+            <p className="mt-2 text-sm text-gray-200 line-clamp-2">
               {d.explanation}
             </p>
           </div>
         ))}
       </div>
 
-      {/* Explain Button */}
       <div className="mt-4">
         <Button onClick={explain} className="w-full">
           Explain Latest Decision
         </Button>
       </div>
 
-      {/* Explanation Output */}
       {explanation && (
         <div className="mt-4 rounded-lg border border-primary/40 bg-blue-950/30 p-3">
-          <p className="text-sm text-blue-200">{explanation}</p>
+          <p className="text-sm text-blue-200 whitespace-pre-wrap">{explanation}</p>
         </div>
       )}
     </Card>

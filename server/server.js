@@ -32,12 +32,28 @@ const allowedOrigins = [
   process.env.CLIENT_URL,
   process.env.SIM_CONTROL_URL
 ].filter(Boolean);
-const corsOrigins = allowedOrigins.length > 0 ? allowedOrigins : ["http://localhost:5173"];
+
+const localhostPattern = /^http:\/\/(localhost|127\.0\.0\.1):\d+$/;
+const defaultDevOrigins = ["http://localhost:5173", "http://localhost:5175", "http://localhost:5177"];
+const corsOrigins = allowedOrigins.length > 0 ? [...new Set([...allowedOrigins, ...defaultDevOrigins])] : defaultDevOrigins;
+
+const isAllowedOrigin = (origin) => {
+  if (!origin) return true;
+  if (corsOrigins.includes(origin)) return true;
+  return localhostPattern.test(origin);
+};
+
+const corsOptions = {
+  origin(origin, callback) {
+    if (isAllowedOrigin(origin)) return callback(null, true);
+    return callback(new Error(`CORS blocked for origin: ${origin}`));
+  },
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "x-sim-key"]
+};
+
 const io = new Server(httpServer, {
-  cors: {
-    origin: corsOrigins,
-    methods: ["GET", "POST"]
-  }
+  cors: corsOptions
 });
 
 // Connect DB before registering routes.
@@ -68,7 +84,7 @@ try {
 
 app.set("io", io);
 app.use(helmet());
-app.use(cors({ origin: corsOrigins }));
+app.use(cors(corsOptions));
 app.use(express.json({ limit: "2mb" }));
 app.use(basicRateLimit());
 

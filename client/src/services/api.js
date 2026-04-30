@@ -1,22 +1,74 @@
+import { DEMO_MODE } from "../config/demoMode";
+
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+const DEMO_ADMIN_EMAIL = import.meta.env.VITE_ADMIN_EMAIL || "";
+const DEMO_ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || "";
 
-export async function request(path, options = {}) {
+let adminLoginPromise = null;
+
+async function tryDemoAdminLogin() {
+  if (!DEMO_MODE || !DEMO_ADMIN_EMAIL || !DEMO_ADMIN_PASSWORD) return null;
+  if (adminLoginPromise) return adminLoginPromise;
+
+  adminLoginPromise = (async () => {
+    try {
+      const res = await fetch(`${API_BASE}/auth/admin-login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: DEMO_ADMIN_EMAIL, password: DEMO_ADMIN_PASSWORD })
+      });
+
+      if (!res.ok) return null;
+
+      const data = await res.json().catch(() => ({}));
+      if (!data?.token) return null;
+
+      localStorage.setItem("sankat-token", data.token);
+      if (data.user) localStorage.setItem("sankat-user", JSON.stringify(data.user));
+      return data.token;
+    } catch {
+      return null;
+    } finally {
+      adminLoginPromise = null;
+    }
+  })();
+
+  return adminLoginPromise;
+}
+
+export async function request(path, options = {}, allowRetry = true) {
   const token = localStorage.getItem("sankat-token");
-  const res = await fetch(`${API_BASE}${path}`, {
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...options.headers
-    },
-    ...options
-  });
+  const { headers: customHeaders = {}, ...restOptions } = options;
 
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ message: "Request failed" }));
-    throw new Error(err.message || "Request failed");
+  try {
+    const res = await fetch(`${API_BASE}${path}`, {
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...customHeaders
+      },
+      ...restOptions
+    });
+
+    if (res.status === 401 && allowRetry && !path.startsWith("/auth/")) {
+      const refreshedToken = await tryDemoAdminLogin();
+      if (refreshedToken) {
+        return request(path, options, false);
+      }
+    }
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ message: `HTTP ${res.status}: Request failed` }));
+      const errorMsg = err.message || "Request failed";
+      console.error(`API ${path}:`, errorMsg, { status: res.status, statusText: res.statusText });
+      throw new Error(errorMsg);
+    }
+
+    return res.json();
+  } catch (error) {
+    console.error(`API ${path} failed:`, error.message, error.stack);
+    throw error;
   }
-
-  return res.json();
 }
 
 export const api = {
@@ -43,6 +95,7 @@ export const api = {
     try {
       return await request("/admin/ai-decisions/explain", { method: "POST", body: JSON.stringify({ decisionType, data }) });
     } catch (err) {
+      console.warn("explainAdminDecision fallback:", err?.message || "unknown error");
       return { explanation: `Demo fallback: AI ${decisionType} decision with 92% confidence based on real-time data.` };
     }
   },
@@ -56,6 +109,7 @@ export const api = {
     try {
       return await request(`/ai/explain?type=${encodeURIComponent(type)}&data=${encodeURIComponent(JSON.stringify(data))}`);
     } catch (err) {
+      console.warn("aiExplain fallback:", err?.message || "unknown error");
       return { explanation: `AI ${type} analysis: Optimal action recommended based on current disaster severity.` };
     }
   },
@@ -63,32 +117,21 @@ export const api = {
     try {
       return await request("/ai/traffic-route", { method: "POST", body: JSON.stringify({ zoneCoords, disasterType }) });
     } catch (err) {
+      console.warn("aiTrafficRoute fallback:", err?.message || "unknown error");
       // Mock realistic safe path for demo (Bhubaneswar safe route)
-      return { routes: [[[20.2961, 85.8245], [20.35, 85.72], [20.52, 85.90]]] };
+      return { routes: [[[20.2961, 85.8245], [20.35, 85.72], [20.52, 85.9]]] };
     }
   },
   aiChat: (message, language, context) => request("/ai/chat", { method: "POST", body: JSON.stringify({ message, language, context }) }),
   assignVolunteer: (payload) => request("/volunteer/assign", { method: "POST", body: JSON.stringify(payload) }),
-  getSimulationState: async () => {
-    const key = import.meta.env.VITE_SIMULATION_KEY || "sankat-demo-key";
-    const res = await fetch(`${API_BASE.replace("/api", "")}/api/simulation/state?key=${encodeURIComponent(key)}`);
-    if (!res.ok) throw new Error("Failed to fetch simulation state");
-    return res.json();
-  },
+  getSimulationState: (key = import.meta.env.VITE_SIMULATION_KEY || "sankat-demo-key") => 
+    request(`/simulation/state?key=${encodeURIComponent(key)}`),
   sendSimulationCommand: async (command, payload = {}) => {
     const key = import.meta.env.VITE_SIMULATION_KEY || "sankat-demo-key";
-    const res = await fetch(`${API_BASE.replace("/api", "")}/api/simulation/command`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-sim-key": key
-      },
+    return request("/simulation/command", { 
+      method: "POST", 
+      headers: { "x-sim-key": key },
       body: JSON.stringify({ command, payload })
     });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ message: "Simulation command failed" }));
-      throw new Error(err.message || "Simulation command failed");
-    }
-    return res.json();
   }
 };
